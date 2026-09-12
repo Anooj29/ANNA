@@ -1,14 +1,491 @@
-<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ANNA · Clinical Command</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
-</head><body>
-<section id="login-view" class="login-wrap"><form id="login-form" class="login-card"><span class="eyebrow">ANNA / CLINICAL ACCESS</span><h1>Care, in motion.</h1><p>Sign in to manage patient visits and ANNA’s clinical notes.</p><label>Email<input name="email" type="email" required autocomplete="username" placeholder="doctor@anna.local"></label><label>Password<input name="password" type="password" required autocomplete="current-password" placeholder="••••••••"></label><p id="login-error" class="error" hidden></p><button class="primary">Sign in securely</button><small>Use credentials configured in the server’s <code>.env</code>.</small></form></section>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ANNA · Clinical Command & Inpatient Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Login Section -->
+  <section id="login-view" class="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="brand-logo">A</div>
+        <h2>Clinical Command Access</h2>
+        <p>Physician & Nursing Ward Management Portal</p>
+      </div>
+      <form id="login-form">
+        <div id="login-error" class="login-error" hidden></div>
+        <div class="form-group">
+          <label for="login-email">Doctor Email / Username</label>
+          <input type="text" id="login-email" required placeholder="doctor@anna.local" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-large">Authenticate Session</button>
+        <div class="demo-cred-hint">
+          Demo: <code>doctor@anna.local</code> / <code>doctor123</code>
+        </div>
+      </form>
+    </div>
+  </section>
 
-<div id="app-view" hidden><header><div><span class="eyebrow">ANNA / CLINICAL COMMAND</span><h1>Good care is a team sport.</h1></div><div class="header-right"><span id="live-status" class="status-dot">ROBOT QUEUE ONLINE</span><button id="logout" class="quiet">Sign out</button></div></header>
-<main><section class="hero"><div><span class="eyebrow">WARD ROUND ORCHESTRATION</span><h2>Assign a visit</h2><p>ANNA takes one authorised visit at a time, completes the requested check, records the result, then returns to its home position.</p></div><form id="task-form" class="task-form"><label>Patient<select id="patient" name="patient_code" required><option value="">Loading admitted patients…</option></select></label><label>Visit type<select name="task_type"><option value="health_check">Full health check</option><option value="rounding">Comfort & safety round</option><option value="medication_reminder">Medication reminder</option><option value="video_call">Telepresence video call</option></select></label><label>Priority<select name="priority"><option value="routine">Routine</option><option value="normal" selected>Normal</option><option value="urgent">Urgent</option></select></label><label class="wide">Clinical instructions<textarea name="instructions" placeholder="e.g. Check temperature and ask about post-operative pain."></textarea></label><button class="primary wide">Add to ANNA’s queue</button><p id="task-message" class="form-message wide"></p></form></section>
-<section class="panel patient-search"><div class="panel-title"><div><span class="eyebrow">PATIENT RECORD SEARCH</span><h2>Find any patient</h2></div></div><form id="patient-search-form" class="search-row"><input id="patient-query" placeholder="Search patient name or ID, including discharged patients"><button class="quiet">Search</button></form><div id="patient-results" class="patient-results"></div></section>
-<section class="grid"><article class="panel queue"><div class="panel-title"><div><span class="eyebrow">LIVE ROUTE</span><h2>Visit queue</h2></div><button id="refresh" class="quiet">Refresh</button></div><div id="task-list" class="task-list"><p class="empty">Loading work queue…</p></div></article><article class="panel"><span class="eyebrow">TELEPRESENCE</span><h2>Speak with a patient</h2><p>Start a secure room with a patient only when ANNA is at their bedside. This prototype opens a local video preview; connect it to your hospital-approved video provider before clinical use.</p><div class="video-box"><video id="preview" autoplay muted playsinline></video><div id="video-placeholder">Camera preview is off</div></div><div class="video-actions"><button id="start-video" class="primary">Start bedside call</button><button id="stop-video" class="quiet">End call</button></div></article></section>
-<section class="panel summaries"><div class="panel-title"><div><span class="eyebrow">PROTECTED CLINICAL RECORD</span><h2>ANNA visit summaries</h2></div><select id="summary-filter"><option value="">All admitted patients</option></select></div><div id="summary-list"><p class="empty">No completed ANNA visits yet.</p></div></section></main></div><script src="app.js"></script></body></html>
+  <!-- Authenticated Clinical Workspace -->
+  <div id="app-view" hidden>
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-logo" aria-label="ANNA Logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 11l6.92.5L12 18"/></svg>
+        </div>
+        <div class="brand-info">
+          <h1>ANNA <span>Clinical Command</span></h1>
+          <p>Autonomous Nursing & Inpatient Telemetry Analytics</p>
+        </div>
+      </div>
+      <div class="header-center">
+        <nav class="nav-tabs">
+          <button class="tab-btn active" data-tab="overview-tab">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Patients Overview</span>
+          </button>
+          <button class="tab-btn" data-tab="analytics-tab">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            <span>Clinical Analytics</span>
+          </button>
+          <button class="tab-btn" data-tab="queue-tab">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+            <span>ANNA Task Queue</span>
+          </button>
+          <button class="tab-btn" data-tab="alerts-tab">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Alert Center <span class="badge-alert" id="urgent-badge" hidden>0</span></span>
+          </button>
+          <button class="tab-btn" data-tab="reports-tab">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Clinical Reports</span>
+          </button>
+        </nav>
+      </div>
+      <div class="header-right">
+        <div class="ws-indicator" id="ws-status">
+          <span class="pulse-dot"></span>
+          <span id="ws-status-text">Connected</span>
+        </div>
+        <div class="user-profile">
+          <div class="user-avatar-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>
+          </div>
+          <span id="clinician-name">Dr. Sarah Rao, MD</span>
+        </div>
+        <button id="btn-logout" class="btn btn-outline" style="padding:0.4rem 0.8rem; font-size:0.85rem;">Sign Out</button>
+        <a href="http://localhost:8000" class="hub-link" title="Return to System Hub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Hub</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Medical Prototype Notice Banner -->
+    <div class="medical-disclaimer-banner">
+      <span class="disclaimer-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </span>
+      <span><strong>CLINICAL DECISION SUPPORT NOTICE:</strong> ANNA is an assistive autonomous robotic system. Physiological vitals (including single-lead ECG heuristics and pulse) and AI observations represent assistive screening signals and do not constitute independent medical diagnoses. All medical choices remain with licensed clinicians.</span>
+    </div>
+
+    <!-- Main Container -->
+    <main class="main-container">
+      <!-- Top KPIs -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">ACTIVE INPATIENTS</span>
+            <div class="kpi-icon-wrap">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-active-patients">--</div>
+          <span class="kpi-sub">Admitted to Ward A & B</span>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">PENDING ANNA TASKS</span>
+            <div class="kpi-icon-wrap text-primary">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value text-primary" id="kpi-pending-tasks">--</div>
+          <span class="kpi-sub">Queued or In Progress</span>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">ROBOT ROUNDS TODAY</span>
+            <div class="kpi-icon-wrap text-success">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value text-success" id="kpi-completed-today">--</div>
+          <span class="kpi-sub">Bedside checkups finished</span>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">URGENT ALERTS</span>
+            <div class="kpi-icon-wrap text-urgent">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value text-urgent" id="kpi-urgent-alerts">--</div>
+          <span class="kpi-sub">Requiring physician sign-off</span>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">ATTENTION FLAGS</span>
+            <div class="kpi-icon-wrap text-warning">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+          </div>
+          <div class="kpi-value text-warning" id="kpi-attention-count">--</div>
+          <span class="kpi-sub">Elevated vitals / irregular rhythm</span>
+        </div>
+      </section>
+
+      <!-- TAB 1: Patients Overview -->
+      <section id="overview-tab" class="tab-content active">
+        <div class="content-header">
+          <div>
+            <h2>Inpatient Health Status Roster</h2>
+            <p class="section-desc">Real-time physiological telemetry, emotional affect, and risk categorization across all admitted patients.</p>
+          </div>
+          <div class="header-actions">
+            <input type="text" id="patient-filter-input" class="search-input" placeholder="Filter patient or bed...">
+            <button class="btn btn-primary" id="btn-open-task-modal">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Assign ANNA Visit</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="card table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Bed</th>
+                <th>Latest Temperature</th>
+                <th>Pulse / SpO2</th>
+                <th>ECG Rhythm</th>
+                <th>Observed Emotion</th>
+                <th>Risk Category</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="patients-table-body">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: Clinical Analytics Overview -->
+      <section id="analytics-tab" class="tab-content">
+        <div class="content-header">
+          <div>
+            <h2>Ward Health Analytics & Robot Fleet Overview</h2>
+            <p class="section-desc">Population risk stratification and autonomous bedside monitoring velocity powered by PostgreSQL 18.6.</p>
+          </div>
+        </div>
+
+        <div class="macro-analytics-grid">
+          <div class="card chart-card">
+            <div class="card-header-flex">
+              <h3>Patient Risk / Attention Distribution</h3>
+              <span class="badge">Stratified by Vitals & Alerts</span>
+            </div>
+            <div class="chart-container-donut">
+              <canvas id="riskDistributionChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card chart-card">
+            <div class="card-header-flex">
+              <h3>ANNA Robot Fleet Tasks</h3>
+              <span class="badge">Operational Health</span>
+            </div>
+            <div class="chart-container-donut">
+              <canvas id="robotFleetChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card chart-card full-width">
+            <div class="card-header-flex">
+              <h3>ANNA Checkup Volume (Last 7 Days)</h3>
+              <span class="badge">Bedside Rounds Finished</span>
+            </div>
+            <div class="chart-container-bar">
+              <canvas id="checkupsTrendChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: ANNA Task Queue -->
+      <section id="queue-tab" class="tab-content">
+        <div class="content-header">
+          <div>
+            <h2>Autonomous Task Dispatch & Status</h2>
+            <p class="section-desc">Active and completed bedside roundings requested by medical staff for the ANNA robot controller.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="btn-open-task-modal-2">+ New Bedside Task</button>
+          </div>
+        </div>
+
+        <div class="card table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Task ID</th>
+                <th>Patient</th>
+                <th>Bed</th>
+                <th>Type & Instructions</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Assigned At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tasks-table-body">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: Alert Center -->
+      <section id="alerts-tab" class="tab-content">
+        <div class="content-header">
+          <div>
+            <h2>Clinical Risk & Alert Center</h2>
+            <p class="section-desc">Automated vitals threshold triggers, irregular rhythm warnings, and stress signals requiring doctor sign-off.</p>
+          </div>
+          <div class="header-actions">
+            <select id="alert-status-filter" class="form-select">
+              <option value="active">Active Alerts Only</option>
+              <option value="all">All Alerts (Including Acknowledged)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Severity</th>
+                <th>Patient</th>
+                <th>Bed</th>
+                <th>Alert Type & Clinical Description</th>
+                <th>Triggered At</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-table-body">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 4: Reports View -->
+      <section id="reports-tab" class="tab-content">
+        <div class="content-header">
+          <div>
+            <h2>Dual Medical Reports & Observations</h2>
+            <p class="section-desc">Side-by-side view comparing formal Clinical Observations with plain-language Patient Summaries.</p>
+          </div>
+          <div class="header-actions">
+            <select id="summary-patient-filter" class="form-select">
+              <option value="">All Admitted Patients</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="summaries-stream" id="summaries-container">
+          <!-- Populated via JS -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- PATIENT ANALYTICS MODAL (DEEP DIVE) -->
+  <div id="analytics-modal" class="modal modal-large" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="analytics-patient-name">Patient Analytics</h3>
+          <span class="patient-sub-badge" id="analytics-patient-meta">ANP-00001 · Bed 1 · Blood B+</span>
+        </div>
+        <div class="header-tools">
+          <div class="date-filter-group">
+            <button class="filter-btn active" data-days="7">7 Days</button>
+            <button class="filter-btn" data-days="30">30 Days</button>
+            <button class="filter-btn" data-days="90">90 Days</button>
+          </div>
+          <button class="close-btn" id="analytics-close">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body analytics-grid">
+        <!-- Vitals Chart Card (Temperature, Pulse, SpO2) -->
+        <div class="analytics-card full-width">
+          <div class="card-head">
+            <h4>Physiological Vital Trends Over Time</h4>
+            <div class="trend-indicator" id="trend-summary-badge">Analyzing trends...</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="vitalsChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Emotion Distribution Chart -->
+        <div class="analytics-card">
+          <h4>Emotion & Facial Affect Distribution</h4>
+          <div class="chart-container-donut">
+            <canvas id="emotionChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Wellness Questionnaire & Stress Profile -->
+        <div class="analytics-card">
+          <h4>Recent Spoken Wellness Responses</h4>
+          <div class="wellness-list" id="wellness-responses-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <!-- Active Medications & Quick Prescribe -->
+        <div class="analytics-card full-width">
+          <div class="card-head">
+            <h4>Current Inpatient Medication Regimen</h4>
+            <button class="btn btn-outline" id="btn-toggle-prescribe">+ Prescribe Medication</button>
+          </div>
+
+          <!-- Prescribe Form (Hidden by default) -->
+          <form id="prescribe-form" class="prescribe-form" hidden>
+            <div class="form-grid">
+              <input type="text" id="prescribe-name" placeholder="Drug Name (e.g. Paracetamol)" required>
+              <input type="text" id="prescribe-dose" placeholder="Dosage (e.g. 500 mg)" required>
+              <input type="text" id="prescribe-freq" placeholder="Frequency (e.g. Twice daily)" required>
+              <input type="text" id="prescribe-time" placeholder="Times (e.g. 08:00, 20:00)" required>
+              <input type="text" id="prescribe-inst" class="full-width" placeholder="Administration Instructions">
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top:0.75rem;">Save Prescription</button>
+          </form>
+
+          <div class="medications-table-wrap">
+            <table class="data-table" style="margin-top: 0.75rem;">
+              <thead>
+                <tr>
+                  <th>Medicine</th>
+                  <th>Dosage</th>
+                  <th>Frequency</th>
+                  <th>Scheduled Times</th>
+                  <th>Instructions</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="patient-meds-body">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASSIGN TASK MODAL -->
+  <div id="task-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Assign ANNA Bedside Visit</h3>
+        <button class="close-btn" id="task-modal-close">&times;</button>
+      </div>
+      <form id="task-assignment-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="task-patient-select">Target Patient *</label>
+            <select id="task-patient-select" required>
+              <option value="" disabled selected>Select an active patient</option>
+              <!-- Populated via JS -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="task-type-select">Visit Protocol *</label>
+            <select id="task-type-select" required>
+              <option value="ANNA Health Check" selected>ANNA Full Health Check (Vitals + ECG + Q&A)</option>
+              <option value="Priority Temperature Followup">Priority Temperature Follow-up</option>
+              <option value="Bedside Medication Reminder">Bedside Medication Reminder</option>
+              <option value="Comfort & Pain Assessment">Comfort & Pain Assessment</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="task-priority-select">Task Priority *</label>
+            <select id="task-priority-select" required>
+              <option value="normal" selected>Normal (Standard Queue Order)</option>
+              <option value="urgent">Urgent (Pre-empts Normal Queue)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="task-instructions">Clinical Instructions (Sent to ANNA Speech/Prompts)</label>
+            <textarea id="task-instructions" rows="3" placeholder="e.g. Inquire carefully about post-operative pain and verify temperature."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="task-modal-dismiss">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-task">Dispatch to Robot Queue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ACKNOWLEDGE ALERT MODAL -->
+  <div id="ack-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Acknowledge Clinical Alert</h3>
+        <button class="close-btn" id="ack-modal-close">&times;</button>
+      </div>
+      <form id="ack-form">
+        <div class="modal-body">
+          <p id="ack-alert-text" style="font-weight:600; margin-bottom:1rem; color:var(--text-main);"></p>
+          <div class="form-group">
+            <label for="ack-note">Physician Clinical Sign-Off Note</label>
+            <textarea id="ack-note" rows="3" placeholder="e.g. Evaluated bedside. Antipyretic administered. Continue monitoring vitals."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="ack-modal-dismiss">Cancel</button>
+          <button type="submit" class="btn btn-primary">Confirm Sign-Off</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

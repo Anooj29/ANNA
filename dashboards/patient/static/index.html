@@ -1,3 +1,247 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ANNA · My Care</title><link rel="stylesheet" href="style.css"></head><body>
-<section id="login" class="login"><form id="login-form"><span>ANNA / MY CARE</span><h1>Your ANNA visit history</h1><p>Enter the patient ID and private access PIN given by your care team.</p><label>Patient ID<input name="patient_code" required placeholder="ANP-00001"></label><label>Access PIN<input name="portal_pin" required inputmode="numeric" maxlength="6" placeholder="Six digits"></label><p id="error" hidden></p><button>View my records</button><small>An ANNA record is not a diagnosis. Speak with your care team about your health.</small></form></section>
-<main id="portal" hidden><header><div><span>ANNA / MY CARE</span><h1 id="name"></h1><p id="id"></p></div><button id="logout">Sign out</button></header><section class="notice">Your visit history is private. ANNA records observations for your care team; it does not diagnose medical conditions.</section><h2>My visit history</h2><div id="history" class="history"></div></main><script src="app.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ANNA · My Care Patient Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Login Overlay -->
+  <section id="login-view" class="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="brand-logo">A</div>
+        <h2>Patient Care Portal</h2>
+        <p>Your personal ANNA checkup records & wellness timeline</p>
+      </div>
+      <form id="portal-login-form">
+        <div id="login-error" class="login-error" hidden></div>
+        <div class="form-group">
+          <label for="patient_code">Patient ID</label>
+          <input type="text" id="patient_code" required placeholder="e.g. ANP-00001" autocomplete="username">
+          <small class="helper-text">Issued during admission at the reception desk.</small>
+        </div>
+        <div class="form-group">
+          <label for="portal_pin">6-Digit Confidential Access PIN</label>
+          <input type="password" id="portal_pin" inputmode="numeric" maxlength="6" required placeholder="••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-purple btn-large">View My Health Records</button>
+        <div class="demo-cred-hint">
+          Demo: <code>ANP-00001</code> / PIN: <code>123456</code>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Authenticated Portal View -->
+  <div id="app-view" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-logo" aria-label="ANNA Logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 11l6.92.5L12 18"/></svg>
+        </div>
+        <div class="brand-info">
+          <h1>ANNA <span>My Care Portal</span></h1>
+          <p>Personal Inpatient Health & Medication Guide</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="user-greeting">
+          <div class="user-avatar-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          </div>
+          <span id="nav-patient-name">Welcome, Patient</span>
+        </div>
+        <button id="btn-logout" class="btn btn-outline" style="padding:0.4rem 0.8rem; font-size:0.85rem;">Sign Out</button>
+        <a href="http://localhost:8000" class="hub-link" title="Return to System Hub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Hub</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Mobile Bottom Navigation (Visible on phones) -->
+    <nav class="mobile-bottom-nav">
+      <a href="#vitals-cards-container" class="mobile-nav-item active">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Home</span>
+      </a>
+      <a href="#trends-section" class="mobile-nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <span>Health</span>
+      </a>
+      <a href="#meds-section" class="mobile-nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+        <span>Medicines</span>
+      </a>
+      <a href="#history-section" class="mobile-nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>History</span>
+      </a>
+    </nav>
+
+    <!-- Warm Welcome Card -->
+    <div class="welcome-banner">
+      <div class="welcome-content">
+        <h2 id="patient-welcome-heading">Welcome, Rohan Verma</h2>
+        <p>Here you can review your recent bedside visits with ANNA, track your vitals over time, and check your prescribed medication schedule.</p>
+        <div class="patient-tags" id="patient-tags-container">
+          <span class="patient-tag" id="tag-patient-code">ID: ANP-00001</span>
+          <span class="patient-tag" id="tag-patient-bed">Bed 01 · Ward A</span>
+          <span class="patient-tag" id="tag-patient-blood">Blood: B+</span>
+          <span class="patient-tag" id="tag-patient-admission">Admitted: Sep 07, 2026</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Patient Notice -->
+    <div class="patient-notice">
+      ℹ️ <strong>Care Team Note:</strong> ANNA assists your care team by recording helpful observations during rounds. ANNA does not diagnose illnesses. Your doctors and nurses review every reading.
+    </div>
+
+    <main class="main-container">
+      <!-- Top KPIs -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Checkups</span>
+          <div class="kpi-value text-purple" id="kpi-total-checkups">--</div>
+          <span class="kpi-sub">Completed by ANNA</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Latest Checkup</span>
+          <div class="kpi-value-sm" id="kpi-latest-checkup-date">--</div>
+          <span class="kpi-sub">Most recent bedside visit</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Active Medications</span>
+          <div class="kpi-value text-teal" id="kpi-med-count">--</div>
+          <span class="kpi-sub">Prescribed by doctor</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Upcoming Dose</span>
+          <div class="kpi-value-sm" id="kpi-upcoming-dose">Scheduled</div>
+          <span class="kpi-sub">Nurse administered</span>
+        </div>
+      </section>
+
+      <!-- SECTION 1: Latest Health Check -->
+      <section class="portal-section">
+        <div class="section-title">
+          <h3>🩺 My Latest Health Readings</h3>
+          <span class="recorded-time" id="latest-vitals-time">Recorded on --</span>
+        </div>
+
+        <div class="vitals-cards-grid" id="vitals-cards-container">
+          <div class="vital-card">
+            <span class="vital-icon">🌡️</span>
+            <div class="vital-name">Body Temperature</div>
+            <div class="vital-num" id="vital-temp">--</div>
+            <div class="vital-status" id="vital-temp-status">Checking...</div>
+          </div>
+          <div class="vital-card">
+            <span class="vital-icon">❤️</span>
+            <div class="vital-name">Heart Pulse Rate</div>
+            <div class="vital-num" id="vital-pulse">--</div>
+            <div class="vital-status" id="vital-pulse-status">Checking...</div>
+          </div>
+          <div class="vital-card">
+            <span class="vital-icon">🫁</span>
+            <div class="vital-name">Oxygen Level (SpO2)</div>
+            <div class="vital-num" id="vital-spo2">--</div>
+            <div class="vital-status" id="vital-spo2-status">Checking...</div>
+          </div>
+          <div class="vital-card">
+            <span class="vital-icon">📈</span>
+            <div class="vital-name">Heart Rhythm Check</div>
+            <div class="vital-num-text" id="vital-ecg">--</div>
+            <div class="vital-status" id="vital-ecg-status">Observed by sensor</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: Simple Vital Trends -->
+      <section class="portal-section">
+        <div class="section-title">
+          <h3>📊 My Health Progress Chart</h3>
+          <span class="helper-text">Visual view of your vitals over past visits</span>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-container">
+            <canvas id="patientTrendsChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3: Visit History & Conversations -->
+      <section class="portal-section">
+        <div class="section-title">
+          <h3>💬 ANNA Visit History & Notes</h3>
+          <span class="helper-text">Friendly summaries from each of your checkups</span>
+        </div>
+        <div class="history-stream" id="history-stream-container">
+          <!-- Populated via JS -->
+        </div>
+      </section>
+
+      <!-- SECTION 4: Prescribed Medications -->
+      <section class="portal-section">
+        <div class="section-title">
+          <h3>💊 My Prescribed Medications</h3>
+          <span class="helper-text">Administered by ward nursing staff</span>
+        </div>
+        <div class="card table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Medication</th>
+                <th>Dosage</th>
+                <th>Frequency</th>
+                <th>Scheduled Time</th>
+                <th>Special Instructions</th>
+              </tr>
+            </thead>
+            <tbody id="patient-medications-table">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 5: Reassuring Health & Wellness Tips -->
+      <section class="portal-section">
+        <div class="section-title">
+          <h3>✨ Ward Wellness Tips</h3>
+        </div>
+        <div class="wellness-tips-grid">
+          <div class="tip-card">
+            <div class="tip-icon">💧</div>
+            <div class="tip-title">Stay Well Hydrated</div>
+            <div class="tip-desc">Drink clean water throughout the day unless advised otherwise by your physician.</div>
+          </div>
+          <div class="tip-card">
+            <div class="tip-icon">🛏️</div>
+            <div class="tip-title">Prioritize Restful Sleep</div>
+            <div class="tip-desc">Healing occurs during sleep. Inform your nurse if pain or noise disrupts your night.</div>
+          </div>
+          <div class="tip-card">
+            <div class="tip-icon">🚶</div>
+            <div class="tip-title">Gentle Ward Mobility</div>
+            <div class="tip-desc">Light walking helps circulation. Always ask nursing staff if you require assistance.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      ANNA Healthcare System · Patient Information Portal · Powered by PostgreSQL 18.6
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

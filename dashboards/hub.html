@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ANNA — Hospital Information System Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --secondary: #0f766e;
+      --surface: #ffffff;
+      --background: #f8fafc;
+      --card-border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--background);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--card-border);
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-sm);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 800;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    }
+    .brand-title h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+    }
+    .brand-title p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 9999px;
+      background: #ecfdf5;
+      color: #065f46;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border: 1px solid #a7f3d0;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 1);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    main {
+      flex: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+      width: 100%;
+    }
+    .hero {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    .hero h2 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #0f172a;
+      margin-bottom: 0.75rem;
+    }
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .portals-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+    .portal-card {
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.25s ease;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+      overflow: hidden;
+    }
+    .portal-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+      border-color: #cbd5e1;
+    }
+    .portal-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+    }
+    .card-receptionist::before { background: #0284c7; }
+    .card-clinician::before { background: #0f766e; }
+    .card-patient::before { background: #8b5cf6; }
+
+    .portal-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .portal-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+    .icon-reception { background: #e0f2fe; color: #0369a1; }
+    .icon-clinician { background: #ccfbf1; color: #0f766e; }
+    .icon-patient { background: #ede9fe; color: #6d28d9; }
+
+    .portal-title h3 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .portal-title span {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .portal-desc {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+    .portal-features {
+      list-style: none;
+      margin-bottom: 2rem;
+      font-size: 0.88rem;
+    }
+    .portal-features li {
+      padding: 0.4rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #334155;
+    }
+    .portal-features li::before {
+      content: "✓";
+      color: var(--success);
+      font-weight: 700;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.85rem 1.5rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-teal { background: var(--secondary); color: #fff; }
+    .btn-teal:hover { background: #115e59; }
+    .btn-purple { background: #7c3aed; color: #fff; }
+    .btn-purple:hover { background: #6d28d9; }
+
+    .credentials-box {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      background: #f1f5f9;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #334155;
+    }
+
+    .demo-flow-section {
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 2.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .demo-flow-section h3 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .workflow-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+    }
+    .step-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 1.25rem;
+      background: #fafafa;
+    }
+    .step-number {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      line-height: 28px;
+      text-align: center;
+      border-radius: 50%;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
+    .step-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.35rem;
+    }
+    .step-desc {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--card-border);
+      padding: 1.5rem 2.5rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">A</div>
+      <div class="brand-title">
+        <h1>ANNA Hospital Management System</h1>
+        <p>Advanced Neural Nursing Automobile · Production Prototype</p>
+      </div>
+    </div>
+    <div class="status-badge">
+      <span class="pulse-dot"></span>
+      <span>PostgreSQL 18.6 Connected · Real-time Feed Active</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h2>Unified Care Orchestration Platform</h2>
+      <p>An intelligent hospital ward operating system powering autonomous bedside visits, multi-role clinical workflows, and real-time patient telemetry.</p>
+    </section>
+
+    <div class="portals-grid">
+      <!-- Receptionist Portal -->
+      <div class="portal-card card-receptionist">
+        <div>
+          <div class="portal-header">
+            <div class="portal-icon icon-reception">🗂️</div>
+            <div class="portal-title">
+              <span>Intake & Beds</span>
+              <h3>Receptionist</h3>
+            </div>
+          </div>
+          <p class="portal-desc">Manage the 20-bed visual ward map, register incoming patients with OpenCV face verification, and handle discharges.</p>
+          <ul class="portal-features">
+            <li>Interactive Ward A & B bed grid</li>
+            <li>Dual-cascade face intake verification</li>
+            <li>Instant ANP-XXXXX and PIN issuance</li>
+            <li>Patient search and one-click discharge</li>
+          </ul>
+        </div>
+        <div>
+          <a href="/receptionist" class="btn btn-primary" style="width: 100%;">Open Reception Desk (Port 8001)</a>
+          <div class="credentials-box">
+            Account: <strong>reception@anna.local</strong><br>
+            Password: <strong>reception123</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clinician Portal -->
+      <div class="portal-card card-clinician">
+        <div>
+          <div class="portal-header">
+            <div class="portal-icon icon-clinician">🩺</div>
+            <div class="portal-title">
+              <span>Care Station</span>
+              <h3>Doctor / Clinician</h3>
+            </div>
+          </div>
+          <p class="portal-desc">Command center for physicians: schedule ANNA bedside visits, track urgent alerts, and inspect vital trend analytics.</p>
+          <ul class="portal-features">
+            <li>Interactive vital trends (Temp, Pulse, SpO2)</li>
+            <li>ANNA task queue & live demo simulator</li>
+            <li>Alert center with clinical acknowledgement</li>
+            <li>Dual-view observation reports</li>
+          </ul>
+        </div>
+        <div>
+          <a href="/clinician" class="btn btn-teal" style="width: 100%;">Open Clinical Command (Port 8002)</a>
+          <div class="credentials-box">
+            Account: <strong>doctor@anna.local</strong><br>
+            Password: <strong>doctor123</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient Portal -->
+      <div class="portal-card card-patient">
+        <div>
+          <div class="portal-header">
+            <div class="portal-icon icon-patient">📱</div>
+            <div class="portal-title">
+              <span>Personal Health</span>
+              <h3>Patient Portal</h3>
+            </div>
+          </div>
+          <p class="portal-desc">Accessible, reassuring self-service portal for patients to view checkup timelines, friendly vitals, and medication schedules.</p>
+          <ul class="portal-features">
+            <li>Simple PIN-secured authentication</li>
+            <li>Reassuring plain-language summaries</li>
+            <li>Visual vitals status & history timeline</li>
+            <li>Prescribed medications schedule</li>
+          </ul>
+        </div>
+        <div>
+          <a href="/patient" class="btn btn-purple" style="width: 100%;">Open Patient Portal (Port 8003)</a>
+          <div class="credentials-box">
+            Demo ID: <strong>ANP-00001</strong><br>
+            Access PIN: <strong>123456</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Demonstration Workflow Guide for SIH -->
+    <section class="demo-flow-section">
+      <h3>🚀 End-to-End SIH 2026 Demonstration Workflow</h3>
+      <p style="color: var(--text-muted); font-size: 0.95rem;">
+        Follow this live 5-step sequence during demonstration to showcase the unified database and real-time automation:
+      </p>
+      <div class="workflow-steps">
+        <div class="step-box">
+          <span class="step-number">1</span>
+          <div class="step-title">Admit Patient</div>
+          <div class="step-desc">Go to Receptionist, click an available bed, take a photo with face verification, and click Register.</div>
+        </div>
+        <div class="step-box">
+          <span class="step-number">2</span>
+          <div class="step-title">Doctor Queues Checkup</div>
+          <div class="step-desc">In Clinician Portal, select the newly registered patient and click "Assign Visit" (Normal or Urgent).</div>
+        </div>
+        <div class="step-box">
+          <span class="step-number">3</span>
+          <div class="step-title">ANNA Bedside Checkup</div>
+          <div class="step-desc">Either physical robot claims task or click "Simulate Checkup" to perform the AI vitals & Q&A routine.</div>
+        </div>
+        <div class="step-box">
+          <span class="step-number">4</span>
+          <div class="step-title">Doctor Analytics</div>
+          <div class="step-desc">Doctor dashboard updates instantly via WebSocket showing vital trends, emotion distribution, and clinical report.</div>
+        </div>
+        <div class="step-box">
+          <span class="step-number">5</span>
+          <div class="step-title">Patient Review</div>
+          <div class="step-desc">Log into Patient Portal with the patient's code and PIN to view the friendly health report and medications.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    ANNA Healthcare Assistant System · Smart India Hackathon (SIH) 2026 Prototype · Powered by PostgreSQL 18.6 & FastAPI
+  </footer>
+</body>
+</html>

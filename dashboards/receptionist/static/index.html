@@ -1,130 +1,447 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ANNA · Reception</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ANNA · Hospital Reception & Ward Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<header class="topbar">
-  <div class="wordmark">ANNA <span class="wordmark-sub">Reception</span></div>
-  <div id="clock" class="clock"></div>
-</header>
-
-<main class="layout">
-
-  <section class="ward" aria-labelledby="ward-heading">
-    <div class="panel-head">
-      <h2 id="ward-heading">Ward map</h2>
-      <p id="ward-count" class="panel-sub">Loading beds…</p>
+  <!-- Top Navigation Bar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo" aria-label="ANNA Logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 11l6.92.5L12 18"/></svg>
+      </div>
+      <div class="brand-info">
+        <h1>ANNA <span>Hospital Reception</span></h1>
+        <p>Ward Intake & Bed Management System</p>
+      </div>
     </div>
-    <div id="ward-grid" class="ward-grid" role="listbox" aria-label="Select a bed"></div>
-    <p class="ward-legend">
-      <span class="legend-swatch legend-free"></span> Free
-      <span class="legend-swatch legend-selected"></span> Selected
-      <span class="legend-swatch legend-taken"></span> Occupied
-    </p>
-  </section>
+    <div class="header-center">
+      <nav class="nav-tabs">
+        <button class="tab-btn active" data-tab="ward-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+          <span>Ward Bed Map</span>
+        </button>
+        <button class="tab-btn" data-tab="intake-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
+          <span>Admit New Patient</span>
+        </button>
+        <button class="tab-btn" data-tab="patients-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Patient Directory</span>
+        </button>
+        <button class="tab-btn" data-tab="analytics-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <span>Ward Analytics</span>
+        </button>
+      </nav>
+    </div>
+    <div class="header-right">
+      <div class="ws-indicator" id="ws-status" title="Real-time WebSocket Sync">
+        <span class="pulse-dot"></span>
+        <span id="ws-status-text">Live Sync Active</span>
+      </div>
+      <div class="clock font-mono" id="live-clock">--:--:--</div>
+      <a href="http://localhost:8000" class="hub-link" title="Return to System Hub">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Hub</span>
+      </a>
+    </div>
+  </header>
 
-  <section class="intake" aria-labelledby="intake-heading">
+  <!-- Main Container -->
+  <main class="main-container">
+    <!-- Top KPI Cards -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">TOTAL BEDS</span>
+          <div class="kpi-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpi-total-beds">20</div>
+        <span class="kpi-sub">Total ward capacity (Wards A & B)</span>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">OCCUPIED BEDS</span>
+          <div class="kpi-icon-wrap text-urgent">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value text-urgent" id="kpi-occupied-beds">--</div>
+        <span class="kpi-sub" id="kpi-occupancy-rate">--% Occupancy rate</span>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">AVAILABLE BEDS</span>
+          <div class="kpi-icon-wrap text-success">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value text-success" id="kpi-available-beds">--</div>
+        <span class="kpi-sub">Immediate intake ready</span>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">TODAY'S ADMISSIONS</span>
+          <div class="kpi-icon-wrap text-primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value text-primary" id="kpi-admissions-today">--</div>
+        <span class="kpi-sub">Newly enrolled today</span>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">TODAY'S DISCHARGES</span>
+          <div class="kpi-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpi-discharges-today">--</div>
+        <span class="kpi-sub">Beds sanitized & released</span>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">ACTIVE INPATIENTS</span>
+          <div class="kpi-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpi-active-patients">--</div>
+        <span class="kpi-sub">Under active ANNA monitoring</span>
+      </div>
+    </section>
 
-    <form id="intake-form" class="intake-form">
-      <div class="panel-head">
-        <h2 id="intake-heading">New patient</h2>
-        <p class="panel-sub">Fill in the details, capture a photo, pick a bed.</p>
+    <!-- TAB 1: Ward & Bed Map -->
+    <section id="ward-tab" class="tab-content active">
+      <div class="content-header">
+        <div>
+          <h2>Ward Bed Allocation Map</h2>
+          <p class="section-desc">Click any free bed to pre-select it for intake; click an occupied bed to view patient profile or discharge.</p>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot available"></span> Available</span>
+          <span class="legend-item"><span class="legend-dot occupied"></span> Occupied</span>
+          <span class="legend-item"><span class="legend-dot selected"></span> Selected</span>
+        </div>
       </div>
 
-      <div id="error-banner" class="error-banner" hidden></div>
+      <div class="ward-sections">
+        <!-- Ward A -->
+        <div class="ward-block">
+          <div class="ward-title">
+            <div class="ward-badge-pill">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><path d="M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              <h3>Ward A</h3>
+            </div>
+            <span class="badge">General & ICU (Beds 1-10)</span>
+          </div>
+          <div class="bed-grid" id="ward-a-grid">
+            <!-- Populated via JS -->
+          </div>
+        </div>
 
-      <div class="field-grid">
-        <label class="field">
-          <span>Full name</span>
-          <input type="text" name="full_name" autocomplete="off" required>
-        </label>
+        <!-- Ward B -->
+        <div class="ward-block">
+          <div class="ward-title">
+            <div class="ward-badge-pill">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><path d="M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              <h3>Ward B</h3>
+            </div>
+            <span class="badge">General & Step-Down (Beds 11-20)</span>
+          </div>
+          <div class="bed-grid" id="ward-b-grid">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </div>
+    </section>
 
-        <label class="field">
-          <span>Blood group</span>
-          <select name="blood_group" required>
-            <option value="" disabled selected>Select</option>
-            <option>A+</option><option>A-</option>
-            <option>B+</option><option>B-</option>
-            <option>AB+</option><option>AB-</option>
-            <option>O+</option><option>O-</option>
+    <!-- TAB: Ward Analytics -->
+    <section id="analytics-tab" class="tab-content">
+      <div class="content-header">
+        <div>
+          <h2>Reception & Ward Capacity Analytics</h2>
+          <p class="section-desc">Real-time bed utilization, 7-day admission turnover, and ward occupancy trends from PostgreSQL 18.6.</p>
+        </div>
+      </div>
+
+      <div class="analytics-charts-grid">
+        <div class="card chart-card">
+          <div class="card-header-flex">
+            <h3>Overall Bed Occupancy</h3>
+            <span class="badge" id="occupancy-summary-badge">Capacity Status</span>
+          </div>
+          <div class="chart-container-donut">
+            <canvas id="receptionOccupancyChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-header-flex">
+            <h3>Ward A vs Ward B Distribution</h3>
+            <span class="badge">Capacity Comparison</span>
+          </div>
+          <div class="chart-container-bar">
+            <canvas id="wardDistributionChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card chart-card full-width">
+          <div class="card-header-flex">
+            <h3>7-Day Admission vs Discharge Volume</h3>
+            <span class="badge">Turnover Velocity</span>
+          </div>
+          <div class="chart-container-line">
+            <canvas id="admissionDischargeChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Patient Intake Registration -->
+    <section id="intake-tab" class="tab-content">
+      <div class="content-header">
+        <div>
+          <h2>Patient Admission & Face Enrollment</h2>
+          <p class="section-desc">Register demographic data, assign a ward bed, and capture a reference photo validated for ANNA robot recognition.</p>
+        </div>
+      </div>
+
+      <form id="intake-form" class="intake-layout">
+        <!-- Demographics Column -->
+        <div class="card form-card">
+          <h3 class="card-title">1. Patient Demographics</h3>
+
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="full_name">Full Legal Name *</label>
+              <input type="text" id="full_name" name="full_name" placeholder="e.g. Ramesh Chandra Sharma" required autocomplete="off">
+            </div>
+
+            <div class="form-group">
+              <label for="date_of_birth">Date of Birth</label>
+              <input type="date" id="date_of_birth" name="date_of_birth">
+            </div>
+
+            <div class="form-group">
+              <label for="gender">Gender *</label>
+              <select id="gender" name="gender" required>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="blood_group">Blood Group *</label>
+              <select id="blood_group" name="blood_group" required>
+                <option value="" disabled selected>Select blood type</option>
+                <option value="A+">A+</option><option value="A-">A-</option>
+                <option value="B+">B+</option><option value="B-">B-</option>
+                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                <option value="O+">O+</option><option value="O-">O-</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="height_cm">Height (cm) *</label>
+              <input type="number" step="0.1" id="height_cm" name="height_cm" placeholder="170.0" required>
+            </div>
+
+            <div class="form-group">
+              <label for="weight_kg">Weight (kg) *</label>
+              <input type="number" step="0.1" id="weight_kg" name="weight_kg" placeholder="68.5" required>
+            </div>
+
+            <div class="form-group">
+              <label for="phone">Phone Number</label>
+              <input type="tel" id="phone" name="phone" placeholder="+91 98765 43210">
+            </div>
+
+            <div class="form-group full-width">
+              <label for="emergency_contact">Emergency Contact (Name & Phone)</label>
+              <input type="text" id="emergency_contact" name="emergency_contact" placeholder="Spouse: +91 98765 00000">
+            </div>
+
+            <div class="form-group full-width">
+              <label for="address">Residential Address</label>
+              <textarea id="address" name="address" rows="2" placeholder="Street, City, Postal Code"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bed & Face Enrollment Column -->
+        <div class="card form-card">
+          <h3 class="card-title">2. Bed Assignment & Face Enrollment</h3>
+
+          <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="bed_number">Assigned Ward Bed *</label>
+            <select id="bed_number" name="bed_number" required>
+              <option value="" disabled selected>Choose an available bed</option>
+              <!-- Populated via JS -->
+            </select>
+            <small class="helper-text">Only currently unoccupied beds are listed.</small>
+          </div>
+
+          <!-- Camera & Face Verification -->
+          <div class="camera-module">
+            <label class="camera-label">Patient Reference Photo (OpenCV AI Validated)</label>
+            <p class="helper-text" style="margin-bottom: 0.75rem;">
+              ANNA uses this reference photo to recognize the patient bedside. Exactly one clearly visible face is required.
+            </p>
+
+            <div class="camera-box">
+              <video id="webcam" autoplay playsinline muted></video>
+              <img id="photo-preview" class="photo-preview" alt="Captured Preview" hidden>
+              <canvas id="photo-canvas" hidden></canvas>
+            </div>
+
+            <div class="camera-controls">
+              <button type="button" id="btn-start-camera" class="btn btn-secondary">Start Webcam</button>
+              <button type="button" id="btn-capture" class="btn btn-primary" disabled>Capture Photo</button>
+              <button type="button" id="btn-retake" class="btn btn-secondary" hidden>Retake</button>
+              
+              <span class="or-divider">OR</span>
+              
+              <label class="btn btn-outline file-upload-btn">
+                <span>Upload File</span>
+                <input type="file" id="file-input" accept="image/jpeg,image/png">
+              </label>
+            </div>
+
+            <!-- Face Validation Status Alert -->
+            <div id="face-status" class="status-alert" hidden>
+              <span class="status-icon">🔍</span>
+              <span id="face-status-text">Checking face detection...</span>
+            </div>
+          </div>
+
+          <div class="submit-action-row">
+            <button type="submit" id="btn-register" class="btn btn-primary btn-large" disabled>
+              Complete Patient Admission
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- TAB 3: Patient Directory -->
+    <section id="patients-tab" class="tab-content">
+      <div class="content-header">
+        <div>
+          <h2>Patient Directory & Admissions</h2>
+          <p class="section-desc">Search and manage all currently admitted and historical ward patients.</p>
+        </div>
+        <div class="search-filter-row">
+          <div class="search-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="patient-search" placeholder="Search by name, ID (ANP-...), phone, bed...">
+          </div>
+          <select id="patient-ward-filter" class="form-select">
+            <option value="all">All Wards</option>
+            <option value="Ward A">Ward A (Beds 1-10)</option>
+            <option value="Ward B">Ward B (Beds 11-20)</option>
           </select>
-        </label>
-
-        <label class="field">
-          <span>Height (cm)</span>
-          <input type="number" name="height_cm" min="1" step="0.1" required>
-        </label>
-
-        <label class="field">
-          <span>Weight (kg)</span>
-          <input type="number" name="weight_kg" min="1" step="0.1" required>
-        </label>
-      </div>
-
-      <div class="camera-block">
-        <span class="field-label">Reference photo</span>
-        <div class="camera-stage">
-          <video id="video" autoplay playsinline muted></video>
-          <img id="snapshot" alt="Captured reference photo" hidden>
-          <canvas id="canvas" hidden></canvas>
-        </div>
-        <div class="camera-actions">
-          <button type="button" id="capture-btn" class="btn btn-secondary">Capture photo</button>
-          <button type="button" id="retake-btn" class="btn btn-ghost" hidden>Retake</button>
-        </div>
-        <p id="photo-status" class="photo-status" hidden></p>
-      </div>
-
-      <div class="bed-readout">
-        <span class="field-label">Assigned bed</span>
-        <span id="selected-bed" class="bed-value">None selected — pick one from the ward map</span>
-      </div>
-
-      <button type="submit" id="submit-btn" class="btn btn-primary" disabled>Register patient</button>
-    </form>
-
-    <div id="confirmation" class="confirmation" hidden>
-      <p class="tag-eyebrow">Registered</p>
-      <img id="confirm-photo" class="tag-photo" alt="">
-      <p id="confirm-name" class="tag-name"></p>
-      <div class="tag-row">
-        <div>
-          <span class="tag-label">Patient ID</span>
-          <span id="confirm-code" class="tag-code"></span>
-        </div>
-        <div>
-          <span class="tag-label">Bed</span>
-          <span id="confirm-bed" class="tag-code"></span>
+          <select id="patient-status-filter" class="form-select">
+            <option value="all">All Statuses</option>
+            <option value="admitted" selected>Admitted Only</option>
+            <option value="discharged">Discharged</option>
+          </select>
         </div>
       </div>
-      <p class="modal-code">Patient portal PIN: <strong id="confirm-pin"></strong><br><small>Give this to the patient privately. Their ID alone cannot open medical history.</small></p>
-      <button type="button" id="new-patient-btn" class="btn btn-primary">Register another patient</button>
+
+      <div class="card table-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Patient Code</th>
+              <th>Full Name</th>
+              <th>Gender / Blood</th>
+              <th>Bed</th>
+              <th>Admission Date</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="patient-table-body">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Occupied Bed Details / Discharge Modal -->
+  <div id="bed-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-bed-title">Bed Details</h3>
+        <button class="close-btn" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body-content">
+        <!-- Populated via JS -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modal-dismiss">Close</button>
+        <button type="button" class="btn btn-outline" id="modal-assign-anna-action" style="color:var(--primary); border-color:var(--primary);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+          <span>Assign ANNA Visit</span>
+        </button>
+        <button type="button" class="btn btn-danger" id="modal-discharge-action">Discharge Patient & Free Bed</button>
+      </div>
     </div>
-
-  </section>
-
-</main>
-
-<div id="bed-modal" class="modal-overlay" hidden>
-  <div class="modal-card">
-    <button type="button" id="modal-close" class="modal-close" aria-label="Close">&times;</button>
-    <p class="tag-eyebrow">Bed <span id="modal-bed-number"></span></p>
-    <p id="modal-patient-name" class="tag-name"></p>
-    <p id="modal-patient-code" class="modal-code"></p>
-    <p id="modal-admitted" class="panel-sub"></p>
-    <div id="modal-error" class="error-banner" hidden></div>
-    <button type="button" id="modal-discharge-btn" class="btn btn-primary">Discharge &amp; free bed</button>
   </div>
-</div>
 
-<script src="app.js"></script>
+  <!-- Admission Success / PIN Card Modal -->
+  <div id="success-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="text-success">✓ Patient Admitted Successfully</h3>
+        <button class="close-btn" id="success-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 1rem;">The patient has been registered in the hospital database and assigned to their bed. ANNA's facial recognition model has also enrolled the patient reference image.</p>
+        
+        <div class="credentials-card">
+          <div class="cred-row">
+            <span>Patient Name:</span>
+            <strong id="success-patient-name">--</strong>
+          </div>
+          <div class="cred-row">
+            <span>Assigned Bed:</span>
+            <strong id="success-bed-number">--</strong>
+          </div>
+          <div class="cred-row">
+            <span>Patient ID:</span>
+            <strong class="text-primary font-mono" id="success-patient-code">--</strong>
+          </div>
+          <div class="cred-row">
+            <span>Patient Portal PIN:</span>
+            <strong class="text-urgent font-mono" id="success-portal-pin">--</strong>
+          </div>
+        </div>
+        <p class="helper-text" style="margin-top: 0.75rem;">
+          Provide this Patient ID and 6-digit PIN to the patient or family for secure access to the Patient Portal at Port 8003.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="success-done">Done & View Ward</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

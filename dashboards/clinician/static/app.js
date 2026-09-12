@@ -1,40 +1,835 @@
-const $ = s => document.querySelector(s);
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let stream;
+// Clinician Dashboard Application Logic
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {headers: {'Content-Type':'application/json', ...(options.headers || {})}, ...options});
-  if (!response.ok) throw new Error((await response.json().catch(()=>({detail:'Request failed'}))).detail || 'Request failed');
-  return response.status === 204 ? null : response.json();
-}
-function fmt(date) { return new Date(date + (date.endsWith('Z') ? '' : 'Z')).toLocaleString([], {dateStyle:'medium', timeStyle:'short'}); }
-function label(type) { return ({health_check:'Health check',rounding:'Safety round',video_call:'Video call',medication_reminder:'Medication reminder'})[type] || type; }
+let activeUser = null;
+let patientsData = [];
+let tasksData = [];
+let alertsData = [];
+let activeAnalyticsPatientCode = null;
+let currentAnalyticsDays = 7;
+let vitalsChartInstance = null;
+let emotionChartInstance = null;
+let ws = null;
+let ackAlertId = null;
 
-async function load() {
-  const [patients, tasks, summaries] = await Promise.all([api('/api/patients?active_only=true'), api('/api/tasks'), api('/api/summaries')]);
-  const patient = $('#patient'), filter = $('#summary-filter');
-  const current = patient.value, filterValue = filter.value;
-  const options = patients.map(p => `<option value="${esc(p.patient_code)}">Bed ${p.bed_number} · ${esc(p.full_name)} (${esc(p.patient_code)})</option>`).join('');
-  patient.innerHTML = '<option value="">Choose an admitted patient</option>' + options; patient.value = current;
-  filter.innerHTML = '<option value="">All admitted patients</option>' + options; filter.value = filterValue;
-  $('#task-list').innerHTML = tasks.length ? tasks.map(t => `<div class="task"><div class="task-top"><span class="pill ${t.priority}">${esc(t.priority)}</span><span class="task-status ${esc(t.status)}">${esc(t.status.replace('_',' '))}</span></div><h3>Bed ${t.bed_number} · ${esc(t.patient_name)}</h3><p>${esc(label(t.task_type))}${t.instructions ? ' — ' + esc(t.instructions) : ''}</p><small>Assigned ${fmt(t.created_at)} by ${esc(t.assigned_by)}</small></div>`).join('') : '<p class="empty">No visits are waiting. ANNA is at home.</p>';
-  renderSummaries(summaries, filter.value);
+// DOM Elements
+const loginView = document.getElementById("login-view");
+const appView = document.getElementById("app-view");
+const loginForm = document.getElementById("login-form");
+const loginError = document.getElementById("login-error");
+const btnLogout = document.getElementById("btn-logout");
+const clinicianName = document.getElementById("clinician-name");
+
+const patientsTableBody = document.getElementById("patients-table-body");
+const patientFilterInput = document.getElementById("patient-filter-input");
+const tasksTableBody = document.getElementById("tasks-table-body");
+const alertsTableBody = document.getElementById("alerts-table-body");
+const alertStatusFilter = document.getElementById("alert-status-filter");
+const urgentBadge = document.getElementById("urgent-badge");
+
+const taskModal = document.getElementById("task-modal");
+const taskModalClose = document.getElementById("task-modal-close");
+const taskModalDismiss = document.getElementById("task-modal-dismiss");
+const taskAssignmentForm = document.getElementById("task-assignment-form");
+const taskPatientSelect = document.getElementById("task-patient-select");
+const btnOpenTaskModal = document.getElementById("btn-open-task-modal");
+const btnOpenTaskModal2 = document.getElementById("btn-open-task-modal-2");
+
+const analyticsModal = document.getElementById("analytics-modal");
+const analyticsClose = document.getElementById("analytics-close");
+const analyticsPatientName = document.getElementById("analytics-patient-name");
+const analyticsPatientMeta = document.getElementById("analytics-patient-meta");
+const wellnessResponsesList = document.getElementById("wellness-responses-list");
+const patientMedsBody = document.getElementById("patient-meds-body");
+const btnTogglePrescribe = document.getElementById("btn-toggle-prescribe");
+const prescribeForm = document.getElementById("prescribe-form");
+
+const ackModal = document.getElementById("ack-modal");
+const ackModalClose = document.getElementById("ack-modal-close");
+const ackModalDismiss = document.getElementById("ack-modal-dismiss");
+const ackForm = document.getElementById("ack-form");
+const ackAlertText = document.getElementById("ack-alert-text");
+
+const summariesContainer = document.getElementById("summaries-container");
+const summaryPatientFilter = document.getElementById("summary-patient-filter");
+
+// ---- Tab Switching ----
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+    btn.classList.add("active");
+    const tabId = btn.getAttribute("data-tab");
+    document.getElementById(tabId).classList.add("active");
+
+    if (tabId === "overview-tab") loadPatients();
+    if (tabId === "analytics-tab") loadClinicianMacroAnalytics();
+    if (tabId === "queue-tab") loadTasks();
+    if (tabId === "alerts-tab") loadAlerts();
+    if (tabId === "reports-tab") loadSummaries();
+  });
+});
+
+// ---- Authentication ----
+async function checkAuth() {
+  try {
+    const res = await fetch("/api/auth/me");
+    const data = await res.json();
+    if (data.authenticated && data.role === "doctor") {
+      activeUser = data;
+      clinicianName.textContent = data.full_name || "Dr. Sarah Rao, MD";
+      loginView.hidden = true;
+      appView.hidden = false;
+      initDashboard();
+    } else {
+      loginView.hidden = false;
+      appView.hidden = true;
+    }
+  } catch (err) {
+    loginView.hidden = false;
+    appView.hidden = true;
+  }
 }
-function renderSummaries(items, code='') {
-  const shown = code ? items.filter(s => s.patient_code === code) : items;
-  $('#summary-list').innerHTML = shown.length ? shown.map(s => `<article class="summary"><div><span class="eyebrow">BED ${s.bed_number ?? '—'} · ${esc(s.patient_code)}</span><h3>${esc(s.patient_name)}</h3></div><time>${fmt(s.created_at)}</time><p>${esc(s.clinical_summary)}</p><dl>${s.temperature_c ? `<div><dt>Temperature</dt><dd>${esc(s.temperature_c)} °C</dd></div>`:''}${s.pulse_bpm ? `<div><dt>Pulse</dt><dd>${esc(s.pulse_bpm)} bpm</dd></div>`:''}${s.ecg_note ? `<div><dt>ECG note</dt><dd>${esc(s.ecg_note)}</dd></div>`:''}</dl><small>Clinical observation recorded by ${esc(s.author)}</small></article>`).join('') : '<p class="empty">No ANNA summaries match this view.</p>';
+
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  loginError.hidden = true;
+  const username_or_email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username_or_email, password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      loginError.textContent = err.detail || "Authentication failed.";
+      loginError.hidden = false;
+      return;
+    }
+
+    const user = await res.json();
+    activeUser = user;
+    clinicianName.textContent = user.full_name;
+    loginView.hidden = true;
+    appView.hidden = false;
+    initDashboard();
+  } catch (err) {
+    loginError.textContent = "Network error during login: " + err;
+    loginError.hidden = false;
+  }
+});
+
+btnLogout.addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  activeUser = null;
+  loginView.hidden = false;
+  appView.hidden = true;
+});
+
+// ---- Real-time WebSocket ----
+function initWebSocket() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${window.location.host}/ws/hospital`;
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    document.getElementById("ws-status-text").textContent = "Live Sync Active";
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      console.log("Clinician WS Event:", msg);
+      loadStats();
+      if (msg.event === "task_created" || msg.event === "task_updated" || msg.event === "checkup_completed") {
+        loadTasks();
+        loadPatients();
+        if (activeAnalyticsPatientCode) {
+          loadPatientAnalytics(activeAnalyticsPatientCode, currentAnalyticsDays);
+        }
+      }
+      if (msg.event === "alert_created" || msg.event === "alert_acknowledged") {
+        loadAlerts();
+      }
+    } catch (e) {
+      console.error("WS error:", e);
+    }
+  };
+
+  ws.onclose = () => {
+    document.getElementById("ws-status-text").textContent = "Reconnecting...";
+    setTimeout(initWebSocket, 3000);
+  };
 }
-async function boot() {
-  try { const me = await api('/api/auth/me'); if (!me.email) return; $('#login-view').hidden=true; $('#app-view').hidden=false; await load(); }
-  catch (_) { /* unauthenticated remains at login */ }
+
+// ---- Initialization ----
+function initDashboard() {
+  initWebSocket();
+  loadStats();
+  loadPatients();
+  loadTasks();
+  loadAlerts();
 }
-$('#login-form').addEventListener('submit', async e => { e.preventDefault(); const data=Object.fromEntries(new FormData(e.target)); try { await api('/api/auth/login',{method:'POST',body:JSON.stringify(data)}); await boot(); } catch(err) { $('#login-error').hidden=false; $('#login-error').textContent=err.message; }});
-$('#task-form').addEventListener('submit', async e => { e.preventDefault(); const msg=$('#task-message'); try { await api('/api/tasks',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))}); e.target.reset(); msg.textContent='Visit added to ANNA’s queue.'; await load(); } catch(err) { msg.textContent=err.message; }});
-$('#refresh').onclick = load;
-$('#summary-filter').onchange = async () => renderSummaries(await api('/api/summaries'), $('#summary-filter').value);
-$('#logout').onclick = async () => { await api('/api/auth/logout',{method:'POST'}); location.reload(); };
-$('#patient-search-form').addEventListener('submit', async e => { e.preventDefault(); const term=$('#patient-query').value.trim(); try { const patients=await api('/api/patients?query='+encodeURIComponent(term)); $('#patient-results').innerHTML=patients.length?patients.map(p=>`<div class="patient-result"><strong>${esc(p.full_name)}</strong><span>${esc(p.patient_code)} · ${p.discharged_at ? 'Discharged' : 'Bed '+esc(p.bed_number)}</span><span>${esc(p.blood_group)} · ${esc(p.height_cm)} cm · ${esc(p.weight_kg)} kg</span><button class="quiet issue-pin" data-code="${esc(p.patient_code)}">Issue new portal PIN</button></div>`).join(''):'<p class="empty">No matching patient was found.</p>'; } catch(err) { $('#patient-results').textContent=err.message; }});
-$('#patient-results').addEventListener('click', async e => { const button=e.target.closest('.issue-pin'); if(!button)return; try { const r=await api('/api/patients/'+encodeURIComponent(button.dataset.code)+'/portal-pin',{method:'POST'}); button.outerHTML=`<strong class="pin-display">New patient PIN: ${esc(r.portal_pin)}</strong>`; } catch(err) { alert(err.message); }});
-$('#start-video').onclick = async () => { try { stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true}); $('#preview').srcObject=stream; $('#video-placeholder').hidden=true; } catch(e) { alert('Camera access was not available. Allow camera permission, then try again.'); }};
-$('#stop-video').onclick = () => { stream?.getTracks().forEach(t=>t.stop()); stream=null; $('#preview').srcObject=null; $('#video-placeholder').hidden=false; };
-boot();
+
+// ---- Stats KPIs ----
+async function loadStats() {
+  try {
+    const res = await fetch("/api/clinician/stats");
+    if (!res.ok) return;
+    const stats = await res.json();
+    document.getElementById("kpi-active-patients").textContent = stats.active_patients;
+    document.getElementById("kpi-pending-tasks").textContent = stats.pending_tasks;
+    document.getElementById("kpi-completed-today").textContent = stats.completed_today;
+    document.getElementById("kpi-urgent-alerts").textContent = stats.urgent_alerts;
+    document.getElementById("kpi-attention-count").textContent = stats.attention_count;
+
+    if (stats.urgent_alerts > 0) {
+      urgentBadge.textContent = stats.urgent_alerts;
+      urgentBadge.hidden = false;
+    } else {
+      urgentBadge.hidden = true;
+    }
+  } catch (err) {
+    console.error("Error loading stats:", err);
+  }
+}
+
+// ---- Patients Table ----
+async function loadPatients(query = "") {
+  try {
+    const res = await fetch(`/api/patients?active_only=true&query=${encodeURIComponent(query)}`);
+    if (!res.ok) return;
+    patientsData = await res.json();
+
+    patientsTableBody.innerHTML = "";
+    taskPatientSelect.innerHTML = '<option value="" disabled selected>Select an active patient</option>';
+    summaryPatientFilter.innerHTML = '<option value="">All Admitted Patients</option>';
+
+    if (patientsData.length === 0) {
+      patientsTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#64748b; padding:2rem;">No matching admitted patients.</td></tr>`;
+      return;
+    }
+
+    patientsData.forEach((p) => {
+      // Add to select options
+      const opt = document.createElement("option");
+      opt.value = p.patient_code;
+      opt.textContent = `${p.full_name} (${p.patient_code} - Bed ${p.bed_number || 'N/A'})`;
+      taskPatientSelect.appendChild(opt);
+
+      const sOpt = document.createElement("option");
+      sOpt.value = p.patient_code;
+      sOpt.textContent = `${p.full_name} (${p.patient_code})`;
+      summaryPatientFilter.appendChild(sOpt);
+
+      const tr = document.createElement("tr");
+      const v = p.latest_vitals;
+      tr.innerHTML = `
+        <td data-label="Patient">
+          <strong style="color:var(--text-main); font-size:0.95rem;">${p.full_name}</strong><br>
+          <span class="font-mono" style="font-size:0.78rem; color:var(--primary); font-weight:700;">${p.patient_code}</span>
+        </td>
+        <td data-label="Bed">
+          <span class="badge" style="font-size:0.82rem; font-weight:700;">Bed ${p.bed_number ? String(p.bed_number).padStart(2, '0') : '--'}</span>
+        </td>
+        <td data-label="Temperature">
+          ${v ? `<strong style="color:${parseFloat(v.temperature) >= 38.0 ? 'var(--urgent)' : 'inherit'};">${v.temperature}</strong>` : '<span style="color:#94a3b8;">--</span>'}
+        </td>
+        <td data-label="Pulse / SpO2">
+          ${v ? `<span>${v.pulse} · <strong style="color:${parseFloat(v.spo2) < 95.0 ? 'var(--urgent)' : 'inherit'};">${v.spo2}</strong></span>` : '<span style="color:#94a3b8;">--</span>'}
+        </td>
+        <td data-label="ECG Rhythm">
+          ${v ? `<span style="font-size:0.8rem; font-weight:600; color:${v.ecg.includes('Irregular') ? 'var(--urgent)' : '#166534'};">${v.ecg}</span>` : '<span style="color:#94a3b8;">--</span>'}
+        </td>
+        <td data-label="Emotion">
+          ${v ? `<span class="badge" style="font-size:0.78rem;">${v.emotion}</span>` : '<span style="color:#94a3b8;">--</span>'}
+        </td>
+        <td data-label="Risk Category">
+          <span class="risk-badge ${p.risk_level}">${p.risk_level}</span>
+        </td>
+        <td data-label="Actions">
+          <button class="btn btn-secondary btn-small" onclick="openPatientAnalytics('${p.patient_code}')">Analytics</button>
+          <button class="btn btn-outline btn-small" onclick="openTaskModalFor('${p.patient_code}')">Assign</button>
+        </td>
+      `;
+      patientsTableBody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Error loading patients:", err);
+  }
+}
+
+patientFilterInput.addEventListener("input", (e) => {
+  loadPatients(e.target.value);
+});
+
+// ---- Tasks Table ----
+async function loadTasks() {
+  try {
+    const res = await fetch("/api/tasks");
+    if (!res.ok) return;
+    tasksData = await res.json();
+
+    tasksTableBody.innerHTML = "";
+    if (tasksData.length === 0) {
+      tasksTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#64748b; padding:2rem;">No active robot tasks scheduled.</td></tr>`;
+      return;
+    }
+
+    tasksData.forEach((t) => {
+      const tr = document.createElement("tr");
+      const assignedStr = new Date(t.assigned_at).toLocaleTimeString();
+      tr.innerHTML = `
+        <td class="font-mono font-bold text-primary">#${t.id}</td>
+        <td><strong>${t.patient_name}</strong><br><small class="font-mono text-muted">${t.patient_code}</small></td>
+        <td>Bed ${t.bed_number || '--'}</td>
+        <td>
+          <strong style="font-size:0.85rem;">${t.task_type}</strong><br>
+          <span style="font-size:0.78rem; color:#64748b;">${t.instructions || 'Routine protocol'}</span>
+        </td>
+        <td><span class="priority-badge ${t.priority}">${t.priority}</span></td>
+        <td><span class="status-badge-task ${t.status}">${t.status}</span></td>
+        <td style="font-size:0.8rem; color:#64748b;">${assignedStr}</td>
+        <td>
+          ${t.status === "queued" ? `
+            <button class="btn btn-primary btn-small" title="Simulate ANNA Bedside Checkup" onclick="simulateRobotCheckup(${t.id})">Simulate 🤖</button>
+            <button class="btn btn-secondary btn-small" onclick="cancelTask(${t.id})">Cancel</button>
+          ` : (t.status === "completed" ? `<button class="btn btn-secondary btn-small" onclick="openPatientAnalytics('${t.patient_code}')">View Report</button>` : `<span style="font-size:0.75rem; color:#64748b;">In progress</span>`)}
+        </td>
+      `;
+      tasksTableBody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Error loading tasks:", err);
+  }
+}
+
+// Simulate Robot Checkup for SIH Demo
+window.simulateRobotCheckup = async function(taskId) {
+  if (!confirm(`Trigger live simulated ANNA bedside checkup for Task #${taskId}?`)) return;
+  try {
+    const res = await fetch(`/api/robot/simulate-checkup/${taskId}`, { method: "POST" });
+    if (!res.ok) {
+      alert("Simulation failed.");
+      return;
+    }
+    loadTasks();
+    loadStats();
+    loadPatients();
+  } catch (e) {
+    alert("Error triggering simulation: " + e);
+  }
+};
+
+window.cancelTask = async function(taskId) {
+  if (!confirm(`Cancel Task #${taskId}?`)) return;
+  try {
+    await fetch(`/api/tasks/${taskId}/cancel`, { method: "POST" });
+    loadTasks();
+    loadStats();
+  } catch (e) {
+    alert("Cancel failed: " + e);
+  }
+};
+
+// ---- Assign Task Modal ----
+function openTaskModalFor(patientCode) {
+  taskPatientSelect.value = patientCode;
+  taskModal.hidden = false;
+}
+
+btnOpenTaskModal.addEventListener("click", () => (taskModal.hidden = false));
+btnOpenTaskModal2.addEventListener("click", () => (taskModal.hidden = false));
+taskModalClose.addEventListener("click", () => (taskModal.hidden = true));
+taskModalDismiss.addEventListener("click", () => (taskModal.hidden = true));
+
+taskAssignmentForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {
+    patient_code: taskPatientSelect.value,
+    task_type: document.getElementById("task-type-select").value,
+    priority: document.getElementById("task-priority-select").value,
+    instructions: document.getElementById("task-instructions").value,
+  };
+
+  try {
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      alert("Failed to assign task.");
+      return;
+    }
+    taskModal.hidden = true;
+    taskAssignmentForm.reset();
+    loadTasks();
+    loadStats();
+  } catch (err) {
+    alert("Network error: " + err);
+  }
+});
+
+// ---- Patient Analytics Deep Dive ----
+window.openPatientAnalytics = async function(patientCode) {
+  activeAnalyticsPatientCode = patientCode;
+  analyticsModal.hidden = false;
+  loadPatientAnalytics(patientCode, currentAnalyticsDays);
+};
+
+analyticsClose.addEventListener("click", () => {
+  analyticsModal.hidden = true;
+  activeAnalyticsPatientCode = null;
+});
+
+document.querySelectorAll(".filter-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentAnalyticsDays = parseInt(btn.getAttribute("data-days"));
+    if (activeAnalyticsPatientCode) {
+      loadPatientAnalytics(activeAnalyticsPatientCode, currentAnalyticsDays);
+    }
+  });
+});
+
+async function loadPatientAnalytics(patientCode, days = 7) {
+  try {
+    const res = await fetch(`/api/patients/${patientCode}/analytics?days=${days}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    analyticsPatientName.textContent = `${data.patient.full_name} (${data.patient.patient_code})`;
+    analyticsPatientMeta.textContent = `Bed ${data.patient.bed_number || 'N/A'} · Blood Group ${data.patient.blood_group} · Risk: ${data.patient.risk_level}`;
+
+    // Update Vitals Line Chart
+    renderVitalsChart(data.vitals_series);
+
+    // Update Emotion Donut Chart
+    renderEmotionChart(data.emotion_distribution);
+
+    // Render Wellness Responses
+    wellnessResponsesList.innerHTML = "";
+    if (data.wellness_responses.length === 0) {
+      wellnessResponsesList.innerHTML = `<div style="color:#64748b; font-size:0.85rem; padding:1rem;">No questionnaire responses recorded yet.</div>`;
+    } else {
+      data.wellness_responses.forEach((r) => {
+        const item = document.createElement("div");
+        item.className = "wellness-item";
+        item.innerHTML = `
+          <div class="wellness-q">${r.question} <span style="float:right; font-size:0.7rem; color:#94a3b8;">${r.date}</span></div>
+          <div class="wellness-a">${r.answer}</div>
+        `;
+        wellnessResponsesList.appendChild(item);
+      });
+    }
+
+    // Render Medications
+    renderPatientMedications(data.medications);
+  } catch (err) {
+    console.error("Error loading analytics:", err);
+  }
+}
+
+function renderVitalsChart(series) {
+  const ctx = document.getElementById("vitalsChart").getContext("2d");
+  if (vitalsChartInstance) vitalsChartInstance.destroy();
+
+  const labels = series.map((s) => s.timestamp);
+  const temps = series.map((s) => s.temperature_c);
+  const pulses = series.map((s) => s.pulse_bpm);
+  const spo2s = series.map((s) => s.spo2_percent);
+
+  vitalsChartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Temperature (°C)",
+          data: temps,
+          borderColor: "#ef4444",
+          backgroundColor: "rgba(239, 68, 68, 0.1)",
+          yAxisID: "yTemp",
+          tension: 0.3,
+          borderWidth: 2,
+        },
+        {
+          label: "Pulse (BPM)",
+          data: pulses,
+          borderColor: "#0284c7",
+          backgroundColor: "rgba(2, 132, 199, 0.1)",
+          yAxisID: "yPulse",
+          tension: 0.3,
+          borderWidth: 2,
+        },
+        {
+          label: "SpO2 (%)",
+          data: spo2s,
+          borderColor: "#10b981",
+          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          yAxisID: "ySpo2",
+          tension: 0.3,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        yTemp: {
+          type: "linear",
+          position: "left",
+          min: 35.5,
+          max: 39.5,
+          title: { display: true, text: "Temp (°C)" },
+        },
+        yPulse: {
+          type: "linear",
+          position: "right",
+          min: 50,
+          max: 130,
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: "Pulse (BPM)" },
+        },
+        ySpo2: {
+          display: false,
+          min: 90,
+          max: 100,
+        },
+      },
+    },
+  });
+
+  // Evaluate summary indicator
+  const latestTemp = temps[temps.length - 1];
+  const badge = document.getElementById("trend-summary-badge");
+  if (latestTemp >= 38.0) {
+    badge.textContent = "⚠ Pyrexia / Elevated Temperature Trend Detected";
+    badge.style.color = "var(--urgent)";
+  } else {
+    badge.textContent = "✓ Vitals Trending Within Baseline Limits";
+    badge.style.color = "var(--success)";
+  }
+}
+
+function renderEmotionChart(distribution) {
+  const ctx = document.getElementById("emotionChart").getContext("2d");
+  if (emotionChartInstance) emotionChartInstance.destroy();
+
+  const labels = Object.keys(distribution);
+  const counts = Object.values(distribution);
+
+  const colors = {
+    Happy: "#10b981",
+    Neutral: "#64748b",
+    Sad: "#3b82f6",
+    Surprise: "#f59e0b",
+    Fear: "#8b5cf6",
+    Angry: "#ef4444",
+    Disgust: "#0f766e",
+  };
+
+  emotionChartInstance = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [
+        {
+          data: counts,
+          backgroundColor: labels.map((l) => colors[l] || "#94a3b8"),
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "right" },
+      },
+    },
+  });
+}
+
+function renderPatientMedications(meds) {
+  patientMedsBody.innerHTML = "";
+  if (meds.length === 0) {
+    patientMedsBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#64748b; padding:1.5rem;">No medications actively prescribed.</td></tr>`;
+    return;
+  }
+  meds.forEach((m) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${m.medicine_name}</strong></td>
+      <td>${m.dosage}</td>
+      <td>${m.frequency}</td>
+      <td><span class="font-mono">${m.scheduled_time}</span></td>
+      <td><small style="color:#64748b;">${m.instructions || '--'}</small></td>
+      <td><span class="badge" style="color:#166534; background:#dcfce7;">Active</span></td>
+    `;
+    patientMedsBody.appendChild(tr);
+  });
+}
+
+btnTogglePrescribe.addEventListener("click", () => {
+  prescribeForm.hidden = !prescribeForm.hidden;
+});
+
+prescribeForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!activeAnalyticsPatientCode) return;
+
+  const payload = {
+    medicine_name: document.getElementById("prescribe-name").value,
+    dosage: document.getElementById("prescribe-dose").value,
+    frequency: document.getElementById("prescribe-freq").value,
+    scheduled_time: document.getElementById("prescribe-time").value,
+    instructions: document.getElementById("prescribe-inst").value,
+  };
+
+  try {
+    const res = await fetch(`/api/patients/${activeAnalyticsPatientCode}/medications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      prescribeForm.reset();
+      prescribeForm.hidden = true;
+      loadPatientAnalytics(activeAnalyticsPatientCode, currentAnalyticsDays);
+    }
+  } catch (err) {
+    alert("Prescription error: " + err);
+  }
+});
+
+// ---- Alert Center ----
+async function loadAlerts() {
+  const status = alertStatusFilter.value;
+  try {
+    const res = await fetch(`/api/alerts?status=${status}`);
+    if (!res.ok) return;
+    alertsData = await res.json();
+
+    alertsTableBody.innerHTML = "";
+    if (alertsData.length === 0) {
+      alertsTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#64748b; padding:2rem;">No alerts matching filter.</td></tr>`;
+      return;
+    }
+
+    alertsData.forEach((a) => {
+      const tr = document.createElement("tr");
+      const timeStr = new Date(a.created_at).toLocaleString();
+      tr.innerHTML = `
+        <td><span class="risk-badge ${a.severity}">${a.severity}</span></td>
+        <td><strong>${a.patient_name}</strong><br><small class="font-mono text-muted">${a.patient_code}</small></td>
+        <td>Bed ${a.bed_number || '--'}</td>
+        <td>
+          <strong style="font-size:0.85rem;">${a.alert_type}</strong><br>
+          <span style="font-size:0.8rem; color:#334155;">${a.message}</span>
+        </td>
+        <td style="font-size:0.78rem; color:#64748b;">${timeStr}</td>
+        <td><span class="status-pill ${a.status}">${a.status}</span></td>
+        <td>
+          ${a.status === "active" ? `<button class="btn btn-secondary btn-small" onclick="openAckModal(${a.id}, '${a.message.replace(/'/g, "\\'")}')">Sign-off ✍️</button>` : `<small style="color:#64748b;">By ${a.acknowledged_by || 'Dr.'}</small>`}
+        </td>
+      `;
+      alertsTableBody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Error loading alerts:", err);
+  }
+}
+
+alertStatusFilter.addEventListener("change", loadAlerts);
+
+window.openAckModal = function(alertId, text) {
+  ackAlertId = alertId;
+  ackAlertText.textContent = text;
+  ackModal.hidden = false;
+};
+
+ackModalClose.addEventListener("click", () => (ackModal.hidden = true));
+ackModalDismiss.addEventListener("click", () => (ackModal.hidden = true));
+
+ackForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!ackAlertId) return;
+
+  const note = document.getElementById("ack-note").value;
+  try {
+    const res = await fetch(`/api/alerts/${ackAlertId}/acknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    });
+    if (res.ok) {
+      ackModal.hidden = true;
+      ackForm.reset();
+      loadAlerts();
+      loadStats();
+    }
+  } catch (err) {
+    alert("Acknowledgement failed: " + err);
+  }
+});
+
+// ---- Summaries Reports ----
+async function loadSummaries() {
+  const patientCode = summaryPatientFilter.value;
+  try {
+    const res = await fetch(`/api/summaries?patient_code=${encodeURIComponent(patientCode)}`);
+    if (!res.ok) return;
+    const summaries = await res.json();
+
+    summariesContainer.innerHTML = "";
+    if (summaries.length === 0) {
+      summariesContainer.innerHTML = `<div class="card" style="padding:2rem; text-align:center; color:#64748b;">No visit reports recorded.</div>`;
+      return;
+    }
+
+    summaries.forEach((s) => {
+      const card = document.createElement("div");
+      card.className = "summary-card";
+      card.innerHTML = `
+        <div class="summary-meta">
+          <div>
+            <strong style="font-size:1.1rem;">${s.patient_name}</strong>
+            <span class="font-mono text-primary font-bold" style="margin-left:0.5rem;">${s.patient_code}</span>
+            <span class="badge" style="margin-left:0.5rem;">Bed ${s.bed_number || '--'}</span>
+          </div>
+          <div style="font-size:0.8rem; color:#64748b;">
+            Recorded on ${s.created_at} · Author: <strong>${s.author}</strong>
+          </div>
+        </div>
+        <div style="display:flex; gap:1.5rem; font-size:0.85rem; margin-bottom:1rem; padding:0.5rem 0.75rem; background:#f8fafc; border-radius:8px;">
+          <span>Temp: <strong>${s.temperature_c || '--'}</strong></span>
+          <span>Pulse: <strong>${s.pulse_bpm || '--'}</strong></span>
+          <span>SpO2: <strong>${s.spo2_percent || '--'}</strong></span>
+          <span>ECG: <strong>${s.ecg_note || '--'}</strong></span>
+        </div>
+        <div class="summary-dual-grid">
+          <div class="summary-col clinical">
+            <h4>🩺 Clinical Observation (Doctor & Nursing View)</h4>
+            <p class="summary-text">${s.clinical_summary}</p>
+          </div>
+          <div class="summary-col patient">
+            <h4>📱 Patient-Friendly Summary (Patient Portal View)</h4>
+            <p class="summary-text">${s.patient_summary}</p>
+          </div>
+        </div>
+      `;
+      summariesContainer.appendChild(card);
+    });
+  } catch (err) {
+    console.error("Error loading summaries:", err);
+  }
+}
+
+// ---- Macro Clinical Analytics Overview ----
+let riskChartInstance = null;
+let fleetChartInstance = null;
+let checkupsTrendChartInstance = null;
+
+async function loadClinicianMacroAnalytics() {
+  try {
+    const res = await fetch("/api/clinician/analytics/overview");
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // 1. Patient Risk Distribution Donut
+    const riskCtx = document.getElementById("riskDistributionChart").getContext("2d");
+    if (riskChartInstance) riskChartInstance.destroy();
+    riskChartInstance = new Chart(riskCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["Stable (Normal)", "Monitor (Warning)", "Urgent Review"],
+        datasets: [{
+          data: [
+            data.risk_distribution.NORMAL || 0,
+            data.risk_distribution.WARNING || 0,
+            data.risk_distribution.URGENT || 0,
+          ],
+          backgroundColor: ["#10b981", "#f59e0b", "#ef4444"],
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "bottom" }
+        },
+        cutout: "68%"
+      }
+    });
+
+    // 2. Robot Fleet Tasks Donut
+    const fleetCtx = document.getElementById("robotFleetChart").getContext("2d");
+    if (fleetChartInstance) fleetChartInstance.destroy();
+    fleetChartInstance = new Chart(fleetCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["Completed Rounds", "Queued / In Progress", "Failed / Cancelled"],
+        datasets: [{
+          data: [
+            data.robot_fleet.completed,
+            data.robot_fleet.pending,
+            data.robot_fleet.failed
+          ],
+          backgroundColor: ["#0284c7", "#f59e0b", "#ef4444"],
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "bottom" }
+        },
+        cutout: "68%"
+      }
+    });
+
+    // 3. 7-Day Checkup Volume
+    const trendCtx = document.getElementById("checkupsTrendChart").getContext("2d");
+    if (checkupsTrendChartInstance) checkupsTrendChartInstance.destroy();
+    checkupsTrendChartInstance = new Chart(trendCtx, {
+      type: "bar",
+      data: {
+        labels: data.checkups_trend.labels,
+        datasets: [{
+          label: "Completed Bedside Checkups",
+          data: data.checkups_trend.counts,
+          backgroundColor: "#0f766e",
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        },
+        plugins: {
+          legend: { position: "bottom" }
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error("Error loading clinician macro analytics:", err);
+  }
+}
+
+summaryPatientFilter.addEventListener("change", loadSummaries);
+
+// Start
+checkAuth();
