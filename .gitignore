@@ -1,0 +1,11 @@
+.venv/
+.venv-dashboard/
+__pycache__/
+*.pyc
+build/
+known_faces/*/
+!known_faces/README.md
+models/*.tflite
+!models/README.md
+.env
+anna_dashboard.db

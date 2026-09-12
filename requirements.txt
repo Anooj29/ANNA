@@ -1,0 +1,28 @@
+# Core CV / numeric stack
+opencv-python>=4.8,<5
+numpy>=1.24,<2
+
+# Raspberry Pi GPIO + I2C ADC (ECG front-end)
+RPi.GPIO>=0.7.1
+adafruit-blinka>=8.20.0
+adafruit-circuitpython-ads1x15>=2.2.23
+
+# Face recognition. dlib (a dependency of face_recognition) compiles a
+# native extension using CMake under the hood, so a working `cmake` binary
+# (and a C++ toolchain) must already be on the system PATH, e.g.:
+#   sudo apt install -y cmake build-essential libopenblas-dev liblapack-dev
+face_recognition>=1.3.0
+dlib>=19.24
+
+# On-device TFLite inference (person + emotion models).
+# If the plain line below fails on your Pi's Python version, use the
+# Coral wheel index instead:
+#   pip install tflite-runtime --extra-index-url https://google-coral.github.io/py-repo/
+tflite-runtime>=2.13.0
+
+# Text to speech (needs the `espeak` system package on Linux:
+# sudo apt install -y espeak)
+pyttsx3>=2.90
+
+# Gemini API
+google-genai>=0.3.0

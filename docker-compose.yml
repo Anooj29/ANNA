@@ -1,0 +1,19 @@
+# Local Postgres for the ANNA dashboards. Entirely optional - if you already
+# have Postgres installed natively, just point the POSTGRES_* env vars at it
+# and skip docker-compose altogether.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: anna_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-anna_hospital}
+      POSTGRES_USER: ${POSTGRES_USER:-anna}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-anna_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - anna_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  anna_postgres_data:
