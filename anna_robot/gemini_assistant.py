@@ -55,19 +55,39 @@ class GeminiAssistant:
         return result or f"Hello {name}. It is great to see you today. I am here to help with your health check."
 
     def health_summary(self, name: str, temperature: str, pulse: str, ecg: str, answers: Dict[str, str]) -> str:
+        return self.health_summaries(name, temperature, pulse, ecg, answers)[1]
+
+    def health_summaries(self, name: str, temperature: str, pulse: str, ecg: str, answers: Dict[str, str]) -> tuple[str, str]:
+        """Return distinct clinician and patient views of the same observation.
+
+        Neither output may present this prototype's simulated/coarse readings
+        as a diagnosis. A licensed clinician remains responsible for review.
+        """
         answer_text = "\n".join(f"{question}: {answer}" for question, answer in answers.items())
-        prompt = (
+        facts = (
             f"Patient name: {name}\n"
             f"Temperature: {temperature}\n"
             f"Pulse: {pulse}\n"
             f"ECG: {ecg}\n\n"
             f"Patient health questionnaire answers:\n{answer_text}\n"
-            "Based on both sensor readings AND the questionnaire answers, give a short friendly 4 to 5 sentence "
-            "health summary. Include wellness advice, diet suggestion, hydration advice, sleep advice, and "
-            "exercise advice. Address the patient by name. Do NOT diagnose any disease. Keep it warm, "
-            "encouraging and easy to understand."
         )
-        result = self._generate(prompt)
-        return result or (
-            f"Hello {name}. Your readings look stable. Remember to stay hydrated, eat healthy, and get enough rest."
+        clinical = self._generate(
+            facts + "Write a concise clinical observation for a licensed clinician. Use precise neutral medical "
+            "terminology only where supported by the listed data; state measured values, reported symptoms, and "
+            "limitations. Do not diagnose, claim normality, infer disease, prescribe treatment, or state urgency. "
+            "End with: 'Requires clinician review; prototype readings are not diagnostic.'"
         )
+        patient = self._generate(
+            facts + f"Write a kind, plain-language explanation addressed to {name}. Be reassuring without hiding "
+            "uncertainty. Do not diagnose, say results are normal/stable, prescribe treatment, or give emergency "
+            "advice. Explain that the care team will review the information and that this prototype cannot diagnose."
+        )
+        fallback_clinical = (
+            f"ANNA visit observation: temperature {temperature}; pulse {pulse}; ECG note {ecg}. "
+            "Questionnaire responses recorded. Requires clinician review; prototype readings are not diagnostic."
+        )
+        fallback_patient = (
+            f"Hello {name}. ANNA has recorded your check-in information for your care team. "
+            "This robot does not diagnose conditions, so please speak with your nurse or doctor about any concerns."
+        )
+        return clinical or fallback_clinical, patient or fallback_patient

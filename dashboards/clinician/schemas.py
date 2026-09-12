@@ -40,6 +40,10 @@ class PatientOut(BaseModel):
     full_name: str
     bed_number: int
     blood_group: str
+    height_cm: float
+    weight_kg: float
+    registered_at: dt.datetime
+    discharged_at: Optional[dt.datetime] = None
 
 
 class SummaryOut(BaseModel):
@@ -48,7 +52,8 @@ class SummaryOut(BaseModel):
     patient_name: str
     bed_number: Optional[int]
     author: str
-    summary: str
+    clinical_summary: str
+    patient_summary: Optional[str]
     temperature_c: Optional[str]
     pulse_bpm: Optional[str]
     ecg_note: Optional[str]
@@ -57,7 +62,11 @@ class SummaryOut(BaseModel):
 
 class RobotCompleteIn(BaseModel):
     status: str = Field(pattern="^(completed|failed)$")
+    # ``summary`` remains accepted for old robot clients; new clients send
+    # both views explicitly.
     summary: str = Field(default="", max_length=5000)
+    clinical_summary: str = Field(default="", max_length=5000)
+    patient_summary: str = Field(default="", max_length=5000)
     temperature_c: Optional[str] = Field(default=None, max_length=30)
     pulse_bpm: Optional[str] = Field(default=None, max_length=30)
     ecg_note: Optional[str] = Field(default=None, max_length=255)

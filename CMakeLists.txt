@@ -160,3 +160,11 @@ add_custom_target(clinician
     COMMENT "Starting the clinician dashboard on http://localhost:8002"
     USES_TERMINAL
 )
+
+add_custom_target(patient
+    DEPENDS init-db
+    COMMAND ${DASHBOARD_VENV_PYTHON} -m uvicorn dashboards.patient.main:app --host 0.0.0.0 --port 8003
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+    COMMENT "Starting the patient dashboard on http://localhost:8003"
+    USES_TERMINAL
+)

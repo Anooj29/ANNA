@@ -248,6 +248,7 @@ function showConfirmation(patient) {
   document.getElementById("confirm-name").textContent = patient.full_name;
   document.getElementById("confirm-code").textContent = patient.patient_code;
   document.getElementById("confirm-bed").textContent = patient.bed_number;
+  document.getElementById("confirm-pin").textContent = patient.portal_pin || "Ask a clinician to issue access";
 
   form.hidden = true;
   confirmation.hidden = false;

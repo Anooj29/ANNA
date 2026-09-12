@@ -42,6 +42,7 @@ class DashboardConfig:
 
     receptionist_port: int = 8001
     clinician_port: int = 8002
+    patient_port: int = 8003
     # Development credentials. Set both in .env before using this on a real
     # network; sessions are deliberately kept in the browser, not the DB.
     clinician_email: str = "doctor@anna.local"
@@ -73,6 +74,7 @@ class DashboardConfig:
             patient_id_prefix=os.environ.get("PATIENT_ID_PREFIX", cls.patient_id_prefix),
             receptionist_port=int(os.environ.get("RECEPTIONIST_PORT", cls.receptionist_port)),
             clinician_port=int(os.environ.get("CLINICIAN_PORT", cls.clinician_port)),
+            patient_port=int(os.environ.get("PATIENT_PORT", cls.patient_port)),
             clinician_email=os.environ.get("CLINICIAN_EMAIL", cls.clinician_email).strip().lower(),
             clinician_password=os.environ.get("CLINICIAN_PASSWORD", cls.clinician_password),
             session_secret=os.environ.get("DASHBOARD_SESSION_SECRET", cls.session_secret),

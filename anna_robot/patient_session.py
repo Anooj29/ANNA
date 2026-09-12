@@ -18,6 +18,7 @@ class PatientSession:
     pulse: str = "--"
     ecg: str = "--"
     health_report: str = "--"
+    clinical_report: str = "--"
     answers: Dict[str, str] = field(default_factory=dict)
 
     def reset(self) -> None:
@@ -27,6 +28,7 @@ class PatientSession:
         self.pulse = "--"
         self.ecg = "--"
         self.health_report = "--"
+        self.clinical_report = "--"
         self.answers = {}
 
     def to_telemetry(self, distance: float, state: str) -> Dict[str, object]:
@@ -45,4 +47,5 @@ class PatientSession:
             "exercise": self.answers.get("exercise", "--"),
             "stress": self.answers.get("stress", "--"),
             "health_report": self.health_report,
+            "clinical_report": self.clinical_report,
         }

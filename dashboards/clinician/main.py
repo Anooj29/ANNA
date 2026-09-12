@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import hmac
 import os
+import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -68,8 +69,25 @@ def me(request: Request):
 
 
 @app.get("/api/patients", response_model=list[PatientOut])
-def patients(_: str = Depends(clinician), db: Session = Depends(get_db)):
-    return db.execute(select(Patient).where(Patient.discharged_at.is_(None)).order_by(Patient.bed_number)).scalars().all()
+def patients(query: str = "", active_only: bool = False, _: str = Depends(clinician), db: Session = Depends(get_db)):
+    """Clinical search includes prior admissions; the task picker asks for active_only."""
+    statement = select(Patient).order_by(Patient.discharged_at.is_(None).desc(), Patient.registered_at.desc())
+    if active_only:
+        statement = statement.where(Patient.discharged_at.is_(None))
+    if query.strip():
+        term = f"%{query.strip()}%"
+        statement = statement.where((Patient.patient_code.ilike(term)) | (Patient.full_name.ilike(term)))
+    return db.execute(statement).scalars().all()
+
+
+@app.post("/api/patients/{patient_code}/portal-pin")
+def reset_portal_pin(patient_code: str, _: str = Depends(clinician), db: Session = Depends(get_db)):
+    patient = db.execute(select(Patient).where(Patient.patient_code == patient_code)).scalar_one_or_none()
+    if patient is None:
+        raise HTTPException(404, "Patient not found.")
+    patient.portal_pin = f"{secrets.randbelow(1_000_000):06d}"
+    db.commit()
+    return {"patient_code": patient.patient_code, "portal_pin": patient.portal_pin}
 
 
 @app.get("/api/tasks", response_model=list[TaskOut])
@@ -96,7 +114,8 @@ def summaries(patient_code: str | None = None, _: str = Depends(clinician), db: 
     if patient_code:
         query = query.where(Patient.patient_code == patient_code)
     return [{"id": s.id, "patient_code": p.patient_code, "patient_name": p.full_name, "bed_number": p.bed_number,
-             "author": s.author, "summary": s.summary, "temperature_c": s.temperature_c,
+             "author": s.author, "clinical_summary": s.summary, "patient_summary": s.patient_summary,
+             "temperature_c": s.temperature_c,
              "pulse_bpm": s.pulse_bpm, "ecg_note": s.ecg_note, "created_at": s.created_at}
             for s, p in db.execute(query).all()]
 
@@ -122,7 +141,10 @@ def complete_task(task_id: int, payload: RobotCompleteIn, _: None = Depends(robo
         raise HTTPException(409, "Task is not active.")
     task.status, task.completed_at, task.failure_reason = payload.status, dt.datetime.utcnow(), payload.failure_reason
     if payload.status == "completed":
-        db.add(MedicalSummary(patient_id=task.patient_id, task_id=task.id, summary=payload.summary or "Visit completed; no narrative supplied.",
+        clinical_summary = payload.clinical_summary or payload.summary or "Visit completed; no clinical observation supplied."
+        patient_summary = payload.patient_summary or "ANNA completed this visit. Please ask your care team if you have questions."
+        db.add(MedicalSummary(patient_id=task.patient_id, task_id=task.id, summary=clinical_summary,
+                              patient_summary=patient_summary,
                               temperature_c=payload.temperature_c, pulse_bpm=payload.pulse_bpm, ecg_note=payload.ecg_note))
     db.commit()
     return {"ok": True, "return_to_home": True}

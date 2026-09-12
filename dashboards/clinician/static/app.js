@@ -11,7 +11,7 @@ function fmt(date) { return new Date(date + (date.endsWith('Z') ? '' : 'Z')).toL
 function label(type) { return ({health_check:'Health check',rounding:'Safety round',video_call:'Video call',medication_reminder:'Medication reminder'})[type] || type; }
 
 async function load() {
-  const [patients, tasks, summaries] = await Promise.all([api('/api/patients'), api('/api/tasks'), api('/api/summaries')]);
+  const [patients, tasks, summaries] = await Promise.all([api('/api/patients?active_only=true'), api('/api/tasks'), api('/api/summaries')]);
   const patient = $('#patient'), filter = $('#summary-filter');
   const current = patient.value, filterValue = filter.value;
   const options = patients.map(p => `<option value="${esc(p.patient_code)}">Bed ${p.bed_number} · ${esc(p.full_name)} (${esc(p.patient_code)})</option>`).join('');
@@ -22,7 +22,7 @@ async function load() {
 }
 function renderSummaries(items, code='') {
   const shown = code ? items.filter(s => s.patient_code === code) : items;
-  $('#summary-list').innerHTML = shown.length ? shown.map(s => `<article class="summary"><div><span class="eyebrow">BED ${s.bed_number ?? '—'} · ${esc(s.patient_code)}</span><h3>${esc(s.patient_name)}</h3></div><time>${fmt(s.created_at)}</time><p>${esc(s.summary)}</p><dl>${s.temperature_c ? `<div><dt>Temperature</dt><dd>${esc(s.temperature_c)} °C</dd></div>`:''}${s.pulse_bpm ? `<div><dt>Pulse</dt><dd>${esc(s.pulse_bpm)} bpm</dd></div>`:''}${s.ecg_note ? `<div><dt>ECG note</dt><dd>${esc(s.ecg_note)}</dd></div>`:''}</dl><small>Recorded by ${esc(s.author)}</small></article>`).join('') : '<p class="empty">No ANNA summaries match this view.</p>';
+  $('#summary-list').innerHTML = shown.length ? shown.map(s => `<article class="summary"><div><span class="eyebrow">BED ${s.bed_number ?? '—'} · ${esc(s.patient_code)}</span><h3>${esc(s.patient_name)}</h3></div><time>${fmt(s.created_at)}</time><p>${esc(s.clinical_summary)}</p><dl>${s.temperature_c ? `<div><dt>Temperature</dt><dd>${esc(s.temperature_c)} °C</dd></div>`:''}${s.pulse_bpm ? `<div><dt>Pulse</dt><dd>${esc(s.pulse_bpm)} bpm</dd></div>`:''}${s.ecg_note ? `<div><dt>ECG note</dt><dd>${esc(s.ecg_note)}</dd></div>`:''}</dl><small>Clinical observation recorded by ${esc(s.author)}</small></article>`).join('') : '<p class="empty">No ANNA summaries match this view.</p>';
 }
 async function boot() {
   try { const me = await api('/api/auth/me'); if (!me.email) return; $('#login-view').hidden=true; $('#app-view').hidden=false; await load(); }
@@ -33,6 +33,8 @@ $('#task-form').addEventListener('submit', async e => { e.preventDefault(); cons
 $('#refresh').onclick = load;
 $('#summary-filter').onchange = async () => renderSummaries(await api('/api/summaries'), $('#summary-filter').value);
 $('#logout').onclick = async () => { await api('/api/auth/logout',{method:'POST'}); location.reload(); };
+$('#patient-search-form').addEventListener('submit', async e => { e.preventDefault(); const term=$('#patient-query').value.trim(); try { const patients=await api('/api/patients?query='+encodeURIComponent(term)); $('#patient-results').innerHTML=patients.length?patients.map(p=>`<div class="patient-result"><strong>${esc(p.full_name)}</strong><span>${esc(p.patient_code)} · ${p.discharged_at ? 'Discharged' : 'Bed '+esc(p.bed_number)}</span><span>${esc(p.blood_group)} · ${esc(p.height_cm)} cm · ${esc(p.weight_kg)} kg</span><button class="quiet issue-pin" data-code="${esc(p.patient_code)}">Issue new portal PIN</button></div>`).join(''):'<p class="empty">No matching patient was found.</p>'; } catch(err) { $('#patient-results').textContent=err.message; }});
+$('#patient-results').addEventListener('click', async e => { const button=e.target.closest('.issue-pin'); if(!button)return; try { const r=await api('/api/patients/'+encodeURIComponent(button.dataset.code)+'/portal-pin',{method:'POST'}); button.outerHTML=`<strong class="pin-display">New patient PIN: ${esc(r.portal_pin)}</strong>`; } catch(err) { alert(err.message); }});
 $('#start-video').onclick = async () => { try { stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true}); $('#preview').srcObject=stream; $('#video-placeholder').hidden=true; } catch(e) { alert('Camera access was not available. Allow camera permission, then try again.'); }};
 $('#stop-video').onclick = () => { stream?.getTracks().forEach(t=>t.stop()); stream=null; $('#preview').srcObject=null; $('#video-placeholder').hidden=false; };
 boot();

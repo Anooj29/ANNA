@@ -289,7 +289,7 @@ class HealthcareRobot:
                     question.label: self.session.answers.get(question.key, "not answered")
                     for question in HEALTH_QUESTIONS
                 }
-                self.session.health_report = self.gemini.health_summary(
+                self.session.clinical_report, self.session.health_report = self.gemini.health_summaries(
                     self.session.name, self.session.temperature, self.session.pulse, self.session.ecg, answers_by_label
                 )
                 self.voice.speak(self.session.health_report)

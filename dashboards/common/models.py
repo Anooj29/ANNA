@@ -44,6 +44,9 @@ class Patient(Base):
 
     registered_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False)
     discharged_at = Column(DateTime, nullable=True)
+    # A patient ID is an identifier, not a password. This short access code
+    # authorises the patient portal alongside the patient ID.
+    portal_pin = Column(String(12), nullable=True)
 
 
 class RobotTask(Base):
@@ -72,6 +75,9 @@ class MedicalSummary(Base):
     task_id = Column(Integer, ForeignKey("robot_tasks.id"), nullable=True, index=True)
     author = Column(String(120), nullable=False, default="ANNA robot")
     summary = Column(Text, nullable=False)
+    # ``summary`` is the clinician-facing observation for backwards
+    # compatibility. ``patient_summary`` is a separate plain-language view.
+    patient_summary = Column(Text, nullable=True)
     temperature_c = Column(String(30), nullable=True)
     pulse_bpm = Column(String(30), nullable=True)
     ecg_note = Column(String(255), nullable=True)

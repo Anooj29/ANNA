@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 
 from .common.config import config
+from sqlalchemy import inspect, text
+
 from .common.database import Base, SessionLocal, engine
 from .common.models import Bed
 
@@ -18,6 +20,18 @@ logger = logging.getLogger(__name__)
 
 def run() -> None:
     Base.metadata.create_all(bind=engine)
+    # create_all deliberately never alters existing tables. Keep this small,
+    # idempotent migration here so installations created before the patient
+    # portal retain their records when the new columns are introduced.
+    inspector = inspect(engine)
+    for table, column, sql in (
+        ("patients", "portal_pin", "ALTER TABLE patients ADD COLUMN portal_pin VARCHAR(12)"),
+        ("medical_summaries", "patient_summary", "ALTER TABLE medical_summaries ADD COLUMN patient_summary TEXT"),
+    ):
+        if table in inspector.get_table_names() and column not in {c["name"] for c in inspector.get_columns(table)}:
+            with engine.begin() as connection:
+                connection.execute(text(sql))
+            logger.info("Migrated %s.%s", table, column)
 
     db = SessionLocal()
     try:

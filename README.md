@@ -138,8 +138,8 @@ The plan is three dashboards sharing one Postgres database:
 2. **Clinician** (built) - authenticated doctor/nurse workspace for placing
    ordered bedside visits, monitoring the queue, reviewing ANNA-generated
    visit summaries, and starting a telepresence camera preview.
-3. **Patient** (not built yet) - lets a patient view their own diagnosis
-   reports.
+3. **Patient** (built) - private portal for a patient to view their own
+   friendly ANNA visit history.
 
 They live in `dashboards/`, separate from the `anna_robot/` package,
 with their own dependencies (`requirements-dashboard.txt`) and their own
@@ -194,6 +194,19 @@ record workflow; connect its robot endpoints only after that physical
 navigation layer has been validated. The camera panel is a local preview,
 not a deployed video-conferencing service; connect it to the hospital's
 approved, encrypted telehealth provider before any patient use.
+
+### Running dashboard 3 — patient portal
+
+```powershell
+cmake --build . --target patient
+```
+
+Open **http://localhost:8003**. Patients sign in using their patient ID and
+the private six-digit access PIN issued at reception (or re-issued by a
+signed-in clinician through Patient Record Search). An ID alone is not a
+password. The portal only exposes the signed-in patient's friendly ANNA
+summaries and recorded visit values; clinician-facing observations remain
+within the clinician dashboard.
 
 ### Running dashboard 1
 

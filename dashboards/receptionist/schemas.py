@@ -28,6 +28,7 @@ class PatientOut(BaseModel):
     photo_path: str
     registered_at: dt.datetime
     discharged_at: Optional[dt.datetime] = None
+    portal_pin: Optional[str] = None
 
 
 class PhotoCheckOut(BaseModel):
