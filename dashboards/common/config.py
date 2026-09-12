@@ -41,6 +41,13 @@ class DashboardConfig:
     patient_id_prefix: str = "ANP"
 
     receptionist_port: int = 8001
+    clinician_port: int = 8002
+    # Development credentials. Set both in .env before using this on a real
+    # network; sessions are deliberately kept in the browser, not the DB.
+    clinician_email: str = "doctor@anna.local"
+    clinician_password: str = "change-me"
+    session_secret: str = "replace-this-with-a-long-random-secret"
+    robot_api_key: str = "change-robot-key"
 
     @property
     def database_url(self) -> str:
@@ -65,6 +72,11 @@ class DashboardConfig:
             total_beds=int(os.environ.get("HOSPITAL_TOTAL_BEDS", cls.total_beds)),
             patient_id_prefix=os.environ.get("PATIENT_ID_PREFIX", cls.patient_id_prefix),
             receptionist_port=int(os.environ.get("RECEPTIONIST_PORT", cls.receptionist_port)),
+            clinician_port=int(os.environ.get("CLINICIAN_PORT", cls.clinician_port)),
+            clinician_email=os.environ.get("CLINICIAN_EMAIL", cls.clinician_email).strip().lower(),
+            clinician_password=os.environ.get("CLINICIAN_PASSWORD", cls.clinician_password),
+            session_secret=os.environ.get("DASHBOARD_SESSION_SECRET", cls.session_secret),
+            robot_api_key=os.environ.get("ROBOT_API_KEY", cls.robot_api_key),
         )
 
 

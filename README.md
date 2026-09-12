@@ -135,8 +135,9 @@ The plan is three dashboards sharing one Postgres database:
    discharges patients to free their bed for reuse. Click any free bed on
    the ward map to assign it during intake; click any occupied bed to see
    who's in it and discharge them.
-2. **Clinician** (not built yet) - doctor/nurse assigns ANNA a patient to
-   visit; ANNA goes there and returns to its home position.
+2. **Clinician** (built) - authenticated doctor/nurse workspace for placing
+   ordered bedside visits, monitoring the queue, reviewing ANNA-generated
+   visit summaries, and starting a telepresence camera preview.
 3. **Patient** (not built yet) - lets a patient view their own diagnosis
    reports.
 
@@ -163,6 +164,36 @@ dashboards/
 │   └── static/          # plain HTML/CSS/JS - no build step
 └── init_db.py          # creates tables, seeds the bed pool
 ```
+
+### Running dashboard 2 — clinician command
+
+Before starting it, set `CLINICIAN_EMAIL`, `CLINICIAN_PASSWORD`,
+`DASHBOARD_SESSION_SECRET`, and `ROBOT_API_KEY` to unique values in `.env`.
+The clinician app uses a signed browser session; patient records, summaries,
+and task assignment endpoints return `401` until a clinician signs in.
+
+```powershell
+cmake --build . --target clinician
+```
+
+Open **http://localhost:8002**. It shares the same SQLite/Postgres database
+as Reception, so newly admitted patients appear automatically. Assignments
+are stored in FIFO order (urgent visits are selected first). The robot-side
+controller can claim the next job with `POST /api/robot/tasks/next`, using
+an `X-Anna-Robot-Key` header, and complete it with
+`POST /api/robot/tasks/{task_id}/complete`. A successful completion writes a
+timestamped medical summary, sensor values, and ECG note to the protected
+clinical record, then returns `return_to_home: true` as the controller's
+instruction to perform its configured home-position routine.
+
+The current robot prototype does not yet contain map/localisation or a
+hardware-specific home-position routine. Those must be calibrated to the
+actual ward, motor encoders, and safety sensors before enabling unattended
+bed navigation. The dashboard/API safely provides the visit sequencing and
+record workflow; connect its robot endpoints only after that physical
+navigation layer has been validated. The camera panel is a local preview,
+not a deployed video-conferencing service; connect it to the hospital's
+approved, encrypted telehealth provider before any patient use.
 
 ### Running dashboard 1
 

@@ -3,7 +3,7 @@
 Three planned dashboards share one Postgres database:
 
 - receptionist/  -- registers patients, assigns patient ID + bed (this one)
-- clinician/      -- doctor/nurse task assignment for the robot (not built yet)
+- clinician/      -- authenticated doctor/nurse task assignment and summaries
 - patient/        -- patient-facing report viewer (not built yet)
 
 common/ holds the SQLAlchemy models and config shared by all three, so

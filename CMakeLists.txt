@@ -71,8 +71,8 @@ install(DIRECTORY known_faces DESTINATION share/anna_robot)
 install(FILES requirements.txt run.sh README.md DESTINATION share/anna_robot)
 
 # -----------------------------------------------------------------------------
-# Dashboards (receptionist now; clinician/patient dashboards will slot in
-# next to it). These run on a regular PC at the reception desk / nurse
+# Dashboards (receptionist and clinician; a patient dashboard can slot in
+# next to them). These run on a regular PC at the reception desk / nurse
 # station, not the Raspberry Pi, so they get their own venv and their own
 # requirements file (requirements-dashboard.txt) rather than sharing the
 # robot's.
@@ -150,5 +150,13 @@ add_custom_target(receptionist
     COMMAND ${DASHBOARD_VENV_PYTHON} -m uvicorn dashboards.receptionist.main:app --host 0.0.0.0 --port 8001
     WORKING_DIRECTORY ${PROJECT_ROOT}
     COMMENT "Starting the receptionist dashboard on http://localhost:8001"
+    USES_TERMINAL
+)
+
+add_custom_target(clinician
+    DEPENDS init-db
+    COMMAND ${DASHBOARD_VENV_PYTHON} -m uvicorn dashboards.clinician.main:app --host 0.0.0.0 --port 8002
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+    COMMENT "Starting the clinician dashboard on http://localhost:8002"
     USES_TERMINAL
 )
