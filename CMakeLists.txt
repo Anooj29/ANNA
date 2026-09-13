@@ -13,6 +13,7 @@ project(AnnaHealthcareRobot NONE)
 #   cmake ..
 #   cmake --build . --target deps     # create venv + install requirements.txt
 #   cmake --build . --target check    # syntax-check the whole package
+#   cmake --build . --target test     # run the unit tests (no hardware needed)
 #   cmake --build . --target run      # start the robot
 #   cmake --install . --prefix /opt   # copy a deployable copy to /opt/anna_robot
 # -----------------------------------------------------------------------------
@@ -54,6 +55,31 @@ add_custom_target(check
     COMMENT "Syntax-checking the anna_robot package"
 )
 
+# Run the test suite. It needs no Raspberry Pi, camera or model files: GPIO
+# is simulated and the camera/models are faked, so this is the fast check to
+# run on a laptop before deploying to the robot.
+add_custom_target(test-deps
+    DEPENDS venv
+    COMMAND ${VENV_PYTHON} -m pip install -r ${PROJECT_ROOT}/requirements-dev.txt
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+    COMMENT "Installing test dependencies from requirements-dev.txt"
+)
+
+add_custom_target(test
+    COMMAND ${VENV_PYTHON} -m pytest ${PROJECT_ROOT}/tests
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+    COMMENT "Running the anna_robot test suite"
+    USES_TERMINAL
+)
+
+# Validate the resolved configuration without starting anything.
+add_custom_target(check-config
+    COMMAND ${VENV_PYTHON} -m anna_robot.main --check-config
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+    COMMENT "Validating the robot configuration"
+    USES_TERMINAL
+)
+
 # Run the robot. Extra CLI flags can be passed with -DARGS="--no-debug-window".
 add_custom_target(run
     COMMAND ${VENV_PYTHON} -m anna_robot.main ${ARGS}
@@ -68,7 +94,8 @@ add_custom_target(run
 install(DIRECTORY anna_robot DESTINATION share/anna_robot)
 install(DIRECTORY models DESTINATION share/anna_robot)
 install(DIRECTORY known_faces DESTINATION share/anna_robot)
-install(FILES requirements.txt run.sh README.md DESTINATION share/anna_robot)
+install(FILES requirements.txt requirements-optional.txt requirements-dev.txt
+              run.sh README.md DESTINATION share/anna_robot)
 
 # -----------------------------------------------------------------------------
 # Dashboards (receptionist and clinician; a patient dashboard can slot in

@@ -1,0 +1,8 @@
+# Optional extras. None of these are required: ANNA logs a clear message and
+# carries on without them.
+
+# On-board microphone listening, so "Hey ANNA" can be heard in the room as
+# well as forwarded by the companion app. Enable with ROBOT_MIC_ENABLED=true.
+# On a Pi you also need: sudo apt install -y portaudio19-dev
+SpeechRecognition>=3.10
+PyAudio>=0.2.13

@@ -2,10 +2,12 @@
 opencv-python>=4.8,<5
 numpy>=1.24,<2
 
-# Raspberry Pi GPIO + I2C ADC (ECG front-end)
-RPi.GPIO>=0.7.1
-adafruit-blinka>=8.20.0
-adafruit-circuitpython-ads1x15>=2.2.23
+# Raspberry Pi GPIO + I2C ADC (ECG front-end).
+# RPi.GPIO is optional off-Pi: anna_robot.hardware.gpio falls back to a
+# simulated backend so the package imports and the tests run anywhere.
+RPi.GPIO>=0.7.1; platform_machine in "armv6l armv7l aarch64"
+adafruit-blinka>=8.20.0; platform_machine in "armv6l armv7l aarch64"
+adafruit-circuitpython-ads1x15>=2.2.23; platform_machine in "armv6l armv7l aarch64"
 
 # Face recognition. dlib (a dependency of face_recognition) compiles a
 # native extension using CMake under the hood, so a working `cmake` binary
@@ -14,10 +16,12 @@ adafruit-circuitpython-ads1x15>=2.2.23
 face_recognition>=1.3.0
 dlib>=19.24
 
-# On-device TFLite inference (person + emotion models).
+# On-device TFLite inference (person/object + emotion models).
 # If the plain line below fails on your Pi's Python version, use the
 # Coral wheel index instead:
 #   pip install tflite-runtime --extra-index-url https://google-coral.github.io/py-repo/
+# Full `tensorflow` also works - anna_robot.perception.tflite_backend picks
+# up whichever of the two is installed.
 tflite-runtime>=2.13.0
 
 # Text to speech (needs the `espeak` system package on Linux:
