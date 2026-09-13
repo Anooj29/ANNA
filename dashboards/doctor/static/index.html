@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANNA - Doctor Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>🩺 ANNA Clinician Portal</h1>
+        <div id="status-bar">System Online</div>
+    </header>
+
+    <main>
+        <section id="patient-list-section">
+            <h2>Patient Registry</h2>
+            <div id="patient-grid" class="grid">
+                <!-- Patients loaded via JS -->
+            </div>
+        </section>
+
+        <section id="detail-section" class="hidden">
+            <button id="back-btn">← Back to Registry</button>
+            <h2 id="detail-name">Patient Details</h2>
+
+            <div class="patient-info-card">
+                <p><strong>Patient Code:</strong> <span id="detail-code">-</span></p>
+                <p><strong>Bed:</strong> <span id="detail-bed">-</span></p>
+                <p><strong>Blood Group:</strong> <span id="detail-blood">-</span></p>
+                <button id="assign-robot-btn" class="btn-primary">Assign ANNA to Patient</button>
+            </div>
+
+            <h3>Health History</h3>
+            <div id="sessions-list">
+                <!-- Sessions loaded via JS -->
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

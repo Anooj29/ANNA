@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+import datetime as dt
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
+
+class BedOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    bed_number: int
+    is_occupied: bool
+
+
+class PatientOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    patient_code: str
+    full_name: str
+    blood_group: str
+    height_cm: float
+    weight_kg: float
+    bed_number: Optional[int]
+    photo_path: str
+    registered_at: dt.datetime

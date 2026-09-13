@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANNA · Reception</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wordmark">ANNA <span class="wordmark-sub">Reception</span></div>
+  <div id="clock" class="clock"></div>
+</header>
+
+<main class="layout">
+
+  <section class="ward" aria-labelledby="ward-heading">
+    <div class="panel-head">
+      <h2 id="ward-heading">Ward map</h2>
+      <p id="ward-count" class="panel-sub">Loading beds…</p>
+    </div>
+    <div id="ward-grid" class="ward-grid" role="listbox" aria-label="Select a bed"></div>
+    <p class="ward-legend">
+      <span class="legend-swatch legend-free"></span> Free
+      <span class="legend-swatch legend-selected"></span> Selected
+      <span class="legend-swatch legend-taken"></span> Occupied
+    </p>
+  </section>
+
+  <section class="intake" aria-labelledby="intake-heading">
+
+    <form id="intake-form" class="intake-form">
+      <div class="panel-head">
+        <h2 id="intake-heading">New patient</h2>
+        <p class="panel-sub">Fill in the details, capture a photo, pick a bed.</p>
+      </div>
+
+      <div id="error-banner" class="error-banner" hidden></div>
+
+      <div class="field-grid">
+        <label class="field">
+          <span>Full name</span>
+          <input type="text" name="full_name" autocomplete="off" required>
+        </label>
+
+        <label class="field">
+          <span>Blood group</span>
+          <select name="blood_group" required>
+            <option value="" disabled selected>Select</option>
+            <option>A+</option><option>A-</option>
+            <option>B+</option><option>B-</option>
+            <option>AB+</option><option>AB-</option>
+            <option>O+</option><option>O-</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Height (cm)</span>
+          <input type="number" name="height_cm" min="1" step="0.1" required>
+        </label>
+
+        <label class="field">
+          <span>Weight (kg)</span>
+          <input type="number" name="weight_kg" min="1" step="0.1" required>
+        </label>
+      </div>
+
+      <div class="camera-block">
+        <span class="field-label">Reference photo</span>
+        <div class="camera-stage">
+          <video id="video" autoplay playsinline muted></video>
+          <img id="snapshot" alt="Captured reference photo" hidden>
+          <canvas id="canvas" hidden></canvas>
+        </div>
+        <div class="camera-actions">
+          <button type="button" id="capture-btn" class="btn btn-secondary">Capture photo</button>
+          <button type="button" id="retake-btn" class="btn btn-ghost" hidden>Retake</button>
+        </div>
+      </div>
+
+      <div class="bed-readout">
+        <span class="field-label">Assigned bed</span>
+        <span id="selected-bed" class="bed-value">None selected — pick one from the ward map</span>
+      </div>
+
+      <button type="submit" id="submit-btn" class="btn btn-primary" disabled>Register patient</button>
+    </form>
+
+    <div id="confirmation" class="confirmation" hidden>
+      <p class="tag-eyebrow">Registered</p>
+      <img id="confirm-photo" class="tag-photo" alt="">
+      <p id="confirm-name" class="tag-name"></p>
+      <div class="tag-row">
+        <div>
+          <span class="tag-label">Patient ID</span>
+          <span id="confirm-code" class="tag-code"></span>
+        </div>
+        <div>
+          <span class="tag-label">Bed</span>
+          <span id="confirm-bed" class="tag-code"></span>
+        </div>
+      </div>
+      <button type="button" id="new-patient-btn" class="btn btn-primary">Register another patient</button>
+    </div>
+
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# Dependencies for the ANNA dashboards (receptionist now; clinician/patient
+# later). Kept separate from requirements.txt on purpose: these dashboards
+# run on a regular PC at the reception desk / nurse station, not the
+# Raspberry Pi glued to the robot, so this file deliberately excludes
+# RPi.GPIO / tflite-runtime / adafruit-blinka.
+
+fastapi>=0.110
+uvicorn[standard]>=0.29
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+python-multipart>=0.0.9
+python-dotenv>=1.0
+
+# Used only to check "is there one clear face in this photo?" before saving
+# it - NOT for identifying who it is (that's the robot's job later, using
+# the real face_recognition/dlib library on the Pi). Plain OpenCV ships
+# prebuilt wheels for Windows/Mac/Linux, so no C++ build toolchain is
+# needed on the reception-desk machine.
+opencv-python-headless>=4.8,<5

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANNA - Patient Portal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-box">
+            <h1>👋 Welcome to ANNA</h1>
+            <p>Please enter your Patient Code to access your health records.</p>
+            <input type="text" id="patient-code" placeholder="e.g. ANP-00001">
+            <button id="login-btn">Login</button>
+        </div>
+    </div>
+
+    <div id="dashboard-screen" class="hidden">
+        <header>
+            <h1>My Health Portal</h1>
+            <button id="logout-btn">Logout</button>
+        </header>
+        <main>
+            <div class="welcome-card">
+                <h2>Hello, <span id="patient-name">-</span>!</h2>
+                <p>Here is your recent health summary from your interactions with ANNA.</p>
+            </div>
+
+            <div id="sessions-list">
+                <!-- Sessions loaded via JS -->
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
