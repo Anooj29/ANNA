@@ -29,6 +29,10 @@ class Config:
     tts_rate: int = 145
     reinit_tts_each_call: bool = True
     show_debug_window: bool = True
+    vision_stream_enabled: bool = True
+    vision_stream_host: str = "0.0.0.0"
+    vision_stream_port: int = 8080
+    vision_stream_token: Optional[str] = None
 
     camera_indices: Tuple[int, ...] = (0, 1)
 
@@ -70,4 +74,8 @@ class Config:
             tts_rate=_int("ROBOT_TTS_RATE", cls.tts_rate),
             reinit_tts_each_call=_bool("ROBOT_TTS_REINIT_EACH_CALL", cls.reinit_tts_each_call),
             show_debug_window=_bool("ROBOT_SHOW_DEBUG_WINDOW", cls.show_debug_window),
+            vision_stream_enabled=_bool("ROBOT_VISION_STREAM_ENABLED", cls.vision_stream_enabled),
+            vision_stream_host=os.environ.get("ROBOT_VISION_STREAM_HOST", cls.vision_stream_host),
+            vision_stream_port=_int("ROBOT_VISION_STREAM_PORT", cls.vision_stream_port),
+            vision_stream_token=os.environ.get("ROBOT_VISION_STREAM_TOKEN") or None,
         )

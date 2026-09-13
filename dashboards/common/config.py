@@ -43,12 +43,17 @@ class DashboardConfig:
     receptionist_port: int = 8001
     clinician_port: int = 8002
     patient_port: int = 8003
+    vision_port: int = 8004
     # Development credentials. Set both in .env before using this on a real
     # network; sessions are deliberately kept in the browser, not the DB.
     clinician_email: str = "doctor@anna.local"
     clinician_password: str = "change-me"
     session_secret: str = "replace-this-with-a-long-random-secret"
     robot_api_key: str = "change-robot-key"
+    # The browser never receives this address or token: the vision dashboard
+    # proxies the MJPEG stream after its own authenticated session check.
+    robot_vision_stream_url: str = ""
+    robot_vision_token: str = ""
 
     @property
     def database_url(self) -> str:
@@ -75,10 +80,13 @@ class DashboardConfig:
             receptionist_port=int(os.environ.get("RECEPTIONIST_PORT", cls.receptionist_port)),
             clinician_port=int(os.environ.get("CLINICIAN_PORT", cls.clinician_port)),
             patient_port=int(os.environ.get("PATIENT_PORT", cls.patient_port)),
+            vision_port=int(os.environ.get("VISION_PORT", cls.vision_port)),
             clinician_email=os.environ.get("CLINICIAN_EMAIL", cls.clinician_email).strip().lower(),
             clinician_password=os.environ.get("CLINICIAN_PASSWORD", cls.clinician_password),
             session_secret=os.environ.get("DASHBOARD_SESSION_SECRET", cls.session_secret),
             robot_api_key=os.environ.get("ROBOT_API_KEY", cls.robot_api_key),
+            robot_vision_stream_url=os.environ.get("ROBOT_VISION_STREAM_URL", cls.robot_vision_stream_url).strip(),
+            robot_vision_token=os.environ.get("ROBOT_VISION_STREAM_TOKEN", cls.robot_vision_token),
         )
 
 

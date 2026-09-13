@@ -120,6 +120,9 @@ the original hardware):
 | `ROBOT_TTS_RATE`                 | `145`                             | Speech rate (words/min)                    |
 | `ROBOT_TTS_REINIT_EACH_CALL`     | `true`                            | Recreate the TTS engine per utterance (avoids a known espeak hang) |
 | `ROBOT_SHOW_DEBUG_WINDOW`        | `true`                            | Show the OpenCV preview window             |
+| `ROBOT_VISION_STREAM_ENABLED`    | `true`                            | Publish ANNA's annotated camera as an MJPEG stream |
+| `ROBOT_VISION_STREAM_PORT`       | `8080`                            | Port for ANNA's point-of-view stream       |
+| `ROBOT_VISION_STREAM_TOKEN`      | *(none)*                          | Optional token required to consume that stream |
 | `ROBOT_LOG_LEVEL`                | `INFO`                            | Logging verbosity                          |
 
 CLI flags (`--port`, `--log-level`, `--no-debug-window`) take priority over
@@ -127,7 +130,7 @@ the environment variables above.
 
 ## Dashboards
 
-The plan is three dashboards sharing one Postgres database:
+The project provides four dashboards sharing one Postgres database:
 
 1. **Receptionist** (built) - registers a patient (name, height, weight,
    blood group, a reference photo), assigns them a unique patient ID and a
@@ -140,6 +143,8 @@ The plan is three dashboards sharing one Postgres database:
    visit summaries, and starting a telepresence camera preview.
 3. **Patient** (built) - private portal for a patient to view their own
    friendly ANNA visit history.
+4. **Robot Vision** (built) - a clinician-authenticated, read-only window
+   into ANNA's live camera, including the detection overlays ANNA uses.
 
 They live in `dashboards/`, separate from the `anna_robot/` package,
 with their own dependencies (`requirements-dashboard.txt`) and their own
@@ -207,6 +212,23 @@ signed-in clinician through Patient Record Search). An ID alone is not a
 password. The portal only exposes the signed-in patient's friendly ANNA
 summaries and recorded visit values; clinician-facing observations remain
 within the clinician dashboard.
+
+### Running dashboard 4 — robot vision
+
+ANNA publishes the annotated camera frame as an MJPEG stream on port 8080 by
+default. Set `ROBOT_VISION_STREAM_URL` on the dashboard machine to the
+Raspberry Pi address (for example `http://anna-robot.local:8080/stream.mjpg`)
+and give both machines the same `ROBOT_VISION_STREAM_TOKEN`. Then run:
+
+```powershell
+cmake --build . --target vision
+```
+
+Open **http://localhost:8004** and sign in with the clinician credentials.
+This page is deliberately view-only: it cannot move the robot, control the
+camera, or send ANNA commands. It proxies the feed so the browser does not
+receive the Pi address or camera token. Green overlays show people; amber
+overlays show faces and recognition status.
 
 ### Running dashboard 1
 

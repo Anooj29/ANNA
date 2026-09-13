@@ -168,3 +168,11 @@ add_custom_target(patient
     COMMENT "Starting the patient dashboard on http://localhost:8003"
     USES_TERMINAL
 )
+
+add_custom_target(vision
+    DEPENDS dashboard-deps
+    COMMAND ${DASHBOARD_VENV_PYTHON} -m uvicorn dashboards.vision.main:app --host 0.0.0.0 --port 8004
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+    COMMENT "Starting the read-only robot vision dashboard on http://localhost:8004"
+    USES_TERMINAL
+)

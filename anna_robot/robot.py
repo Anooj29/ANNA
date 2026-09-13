@@ -19,6 +19,7 @@ from .perception import EmotionDetector, FaceIdentifier, PersonDetector
 from .sensors import EcgSensor, SimulatedPulseSensor, TemperatureSensor, UltrasonicSensor
 from .state import HEALTH_QUESTIONS, HealthStage, RobotState
 from .telemetry import TelemetryLink
+from .vision_stream import VisionStream
 from .voice import VoiceAssistant
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,10 @@ class HealthcareRobot:
         self.gemini = GeminiAssistant(config.gemini_api_key, config.gemini_model)
 
         self.camera = self._open_camera()
+        self.vision_stream = (
+            VisionStream(config.vision_stream_host, config.vision_stream_port, config.vision_stream_token)
+            if config.vision_stream_enabled else None
+        )
 
     def _open_camera(self) -> cv2.VideoCapture:
         for index in self.config.camera_indices:
@@ -90,6 +95,8 @@ class HealthcareRobot:
                 command = self.telemetry.receive_command()
 
                 self._step(frame, distance, command)
+                if self.vision_stream:
+                    self.vision_stream.publish(frame)
 
                 if self.config.show_debug_window:
                     cv2.imshow("Healthcare Robot", frame)
@@ -167,6 +174,12 @@ class HealthcareRobot:
         locations, encodings = self.face_identifier.locate_and_encode(frame)
         logger.debug("Faces detected: %d", len(locations))
 
+        # These are intentionally drawn on the same frame sent to the vision
+        # dashboard, so staff see the robot's actual perception output.
+        for top, right, bottom, left in locations:
+            cv2.rectangle(frame, (left, top), (right, bottom), (0, 191, 255), 2)
+            cv2.putText(frame, "Face", (left, max(top - 10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 191, 255), 2)
+
         if not encodings:
             self.no_face_count += 1
             if self.no_face_count >= self.config.max_no_face_frames:
@@ -195,6 +208,8 @@ class HealthcareRobot:
         logger.debug("Best face distance: %.3f", best_distance)
 
         if name is not None:
+            cv2.putText(frame, f"Recognised: {name}", (left, min(bottom + 24, frame.shape[0] - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 191, 255), 2)
             self.session.name = name
             self.session.emotion = self.emotion_detector.detect(face_crop)
             self.session.answers = {}
@@ -213,6 +228,8 @@ class HealthcareRobot:
             return
 
         self.unknown_attempts += 1
+        cv2.putText(frame, "Unknown face", (left, min(bottom + 24, frame.shape[0] - 8)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 191, 255), 2)
         logger.info("Unknown face. attempt=%d distance=%.3f", self.unknown_attempts, best_distance)
 
         unknown_responses = [
@@ -324,6 +341,11 @@ class HealthcareRobot:
             self.camera.release()
         except Exception:
             logger.exception("Error while releasing the camera.")
+        if self.vision_stream:
+            try:
+                self.vision_stream.close()
+            except Exception:
+                logger.exception("Error while closing the vision stream.")
         try:
             self.telemetry.close()
         except Exception:
