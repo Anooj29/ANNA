@@ -1,8 +1,8 @@
-"""Realistic SIH 2026 Demonstration Seed Data for ANNA Hospital System.
+"""Realistic SIH 2026 Demonstration Seed Data for a fresh ANNA database.
 
 Seeds:
 - 20 beds across Ward A and Ward B
-- Default staff accounts (doctor, receptionist)
+- Staff accounts (passwords supplied through environment variables)
 - 12 diverse patients with realistic medical profiles
 - Comprehensive historical vitals, emotion logs, wellness answers, medical summaries
 - Active and past medications, administration logs
@@ -13,11 +13,16 @@ Seeds:
 from __future__ import annotations
 
 import datetime as dt
+import os
 import random
 import bcrypt
 from sqlalchemy.orm import Session
 
-from dashboards.common.database import SessionLocal, engine, Base
+from dashboards.common.database import SessionLocal, engine
+from alembic import command
+from alembic.config import Config
+from pathlib import Path
+from sqlalchemy import inspect
 from dashboards.common.models import (
     User,
     Bed,
@@ -41,38 +46,28 @@ def hash_secret(secret: str) -> str:
 
 
 def seed_database():
-    Base.metadata.create_all(bind=engine)
+    doctor_password = os.environ.get("SEED_DOCTOR_PASSWORD")
+    reception_password = os.environ.get("SEED_RECEPTION_PASSWORD")
+    patient_pin = os.environ.get("SEED_PATIENT_PIN")
+    if not doctor_password or not reception_password or not patient_pin:
+        raise RuntimeError("Set SEED_DOCTOR_PASSWORD, SEED_RECEPTION_PASSWORD, and SEED_PATIENT_PIN before seeding.")
+    tables = set(inspect(engine).get_table_names())
+    if tables and "alembic_version" not in tables:
+        raise RuntimeError("Refusing to seed an unversioned existing database. See database/MIGRATIONS.md.")
+    command.upgrade(Config(str(Path(__file__).resolve().parents[1] / "alembic.ini")), "head")
     db: Session = SessionLocal()
 
     try:
         # Check if already seeded
-        if db.query(User).count() > 0:
-            print("Database already contains users. Resetting or refreshing seed data...")
-            # Optional: do not duplicate if tables have rows
-            # Clear existing demo data to ensure a clean, reproducible state for SIH demo
-            for table in [
-                AuditLog,
-                Alert,
-                MedicationLog,
-                Medication,
-                MedicalSummary,
-                EmotionRecord,
-                PatientResponse,
-                VitalReading,
-                HealthCheckSession,
-                RobotTask,
-                Patient,
-                Bed,
-                User,
-            ]:
-                db.query(table).delete()
-            db.commit()
+        if any(db.query(model).count() for model in (User, Patient, Bed, RobotTask, VitalReading)):
+            raise RuntimeError("Demo seeding requires an empty database; existing records were not changed.")
+        random.seed(2026)
 
         print("Seeding Users...")
         doctor_user = User(
             username="doctor",
             email="doctor@anna.local",
-            password_hash=hash_secret("doctor123"),
+            password_hash=hash_secret(doctor_password),
             role="doctor",
             full_name="Dr. Sarah Rao, MD",
             is_active=True,
@@ -82,7 +77,7 @@ def seed_database():
         receptionist_user = User(
             username="reception",
             email="reception@anna.local",
-            password_hash=hash_secret("reception123"),
+            password_hash=hash_secret(reception_password),
             role="receptionist",
             full_name="Priya Sharma",
             is_active=True,
@@ -124,7 +119,6 @@ def seed_database():
                 "bed_number": 1,
                 "days_admitted": 6,
                 "discharged": False,
-                "pin": "123456",
             },
             {
                 "full_name": "Ananya Sen",
@@ -139,7 +133,6 @@ def seed_database():
                 "bed_number": 2,
                 "days_admitted": 4,
                 "discharged": False,
-                "pin": "123456",
             },
             {
                 "full_name": "David Mitchell",
@@ -154,7 +147,6 @@ def seed_database():
                 "bed_number": 3,
                 "days_admitted": 7,
                 "discharged": False,
-                "pin": "123456",
             },
             {
                 "full_name": "Meera Krishnan",
@@ -169,7 +161,6 @@ def seed_database():
                 "bed_number": 4,
                 "days_admitted": 3,
                 "discharged": False,
-                "pin": "123456",
             },
             {
                 "full_name": "Vikram Malhotra",
@@ -184,7 +175,6 @@ def seed_database():
                 "bed_number": 5,
                 "days_admitted": 2,
                 "discharged": False,
-                "pin": "123456",
             },
             {
                 "full_name": "Sunita Patil",
@@ -199,7 +189,6 @@ def seed_database():
                 "bed_number": 11,
                 "days_admitted": 5,
                 "discharged": False,
-                "pin": "123456",
             },
             {
                 "full_name": "Arjun Nair",
@@ -214,7 +203,6 @@ def seed_database():
                 "bed_number": 12,
                 "days_admitted": 8,
                 "discharged": False,
-                "pin": "123456",
             },
             {
                 "full_name": "Fatima Begum",
@@ -229,7 +217,6 @@ def seed_database():
                 "bed_number": 13,
                 "days_admitted": 4,
                 "discharged": False,
-                "pin": "123456",
             },
             # Prior discharged patients for historical analytics
             {
@@ -245,7 +232,6 @@ def seed_database():
                 "bed_number": None,
                 "days_admitted": 14,
                 "discharged": True,
-                "pin": "123456",
             },
             {
                 "full_name": "Amitabh Bose",
@@ -260,7 +246,6 @@ def seed_database():
                 "bed_number": None,
                 "days_admitted": 12,
                 "discharged": True,
-                "pin": "123456",
             },
         ]
 
@@ -284,8 +269,8 @@ def seed_database():
                 bed_number=pdata["bed_number"],
                 admission_date=adm_date,
                 discharge_date=dis_date,
-                portal_pin=pdata["pin"],
-                portal_pin_hash=hash_secret(pdata["pin"]),
+                portal_pin=None,
+                portal_pin_hash=hash_secret(patient_pin),
                 status="discharged" if pdata["discharged"] else "admitted",
             )
             db.add(patient)
@@ -356,6 +341,9 @@ def seed_database():
                 ecg_note = "Slightly Irregular" if (patient.id == 3 and checkup_idx > 2) else random.choice(ecg_notes_pool)
 
                 vital = VitalReading(
+                    temperature_status="measured",
+                    pulse_status="measured",
+                    spo2_status="measured",
                     session_id=session.id,
                     patient_id=patient.id,
                     temperature_c=t_val,

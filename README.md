@@ -125,157 +125,63 @@ the original hardware):
 CLI flags (`--port`, `--log-level`, `--no-debug-window`) take priority over
 the environment variables above.
 
-## Dashboards
+## Hospital software application
 
-The plan is three dashboards sharing one Postgres database:
+The hospital software is separate from `anna_robot/`. It uses the central
+FastAPI entry point `backend.app.main`, shared SQLAlchemy models, Alembic
+migrations, and **PostgreSQL only**. It serves the receptionist, clinician,
+and patient interfaces at `/receptionist`, `/clinician`, and `/patient`.
+Robot hardware and navigation stay in the robot package; the hospital app
+communicates with it through authenticated `/api/robot/*` endpoints.
 
-1. **Receptionist** (built) - registers a patient (name, height, weight,
-   blood group, a reference photo), assigns them a unique patient ID and a
-   bed, saves the photo into `known_faces/` so ANNA can recognise them, and
-   discharges patients to free their bed for reuse. Click any free bed on
-   the ward map to assign it during intake; click any occupied bed to see
-   who's in it and discharge them.
-2. **Clinician** (built) - authenticated doctor/nurse workspace for placing
-   ordered bedside visits, monitoring the queue, reviewing ANNA-generated
-   visit summaries, and starting a telepresence camera preview.
-3. **Patient** (built) - private portal for a patient to view their own
-   friendly ANNA visit history.
+### Run on Windows
 
-They live in `dashboards/`, separate from the `anna_robot/` package,
-with their own dependencies (`requirements-dashboard.txt`) and their own
-virtual environment (`.venv-dashboard`) - these run on a regular PC at the
-reception desk / nurse station, not the Raspberry Pi, so they deliberately
-don't pull in `RPi.GPIO` / `tflite-runtime`. They also don't pull in
-`dlib`/`face_recognition`: the intake form only needs to check "is there
-one clear face in this photo?" before saving it, which plain OpenCV
-handles with prebuilt wheels on every OS (Windows included) - no C++
-build toolchain required on this machine. It checks with both frontal and
-profile cascades (`dashboards/receptionist/face_check.py`) so a
-slightly-turned or side-on photo isn't automatically rejected the way a
-frontal-only check would reject it. Actually *identifying* whose face it
-is still uses the real `face_recognition`/dlib library, but only on the
-robot's side.
+1. Install PostgreSQL and create the configured database/user, or run the
+   PostgreSQL service in `docker-compose.yml`.
+2. Copy `.env.example` to `.env`. Set `POSTGRES_*`,
+   `DASHBOARD_SESSION_SECRET`, and `ROBOT_API_KEY` to private values.
+3. Set up dependencies once:
 
-```
-dashboards/
-├── common/            # SQLAlchemy models + config shared by all 3 dashboards
-├── receptionist/       # dashboard 1: FastAPI app + static frontend
-│   ├── face_check.py    # "is there a face?" check (frontal + profile cascades)
-│   └── static/          # plain HTML/CSS/JS - no build step
-└── init_db.py          # creates tables, seeds the bed pool
-```
+   ```powershell
+   py -3.12 -m venv .venv-dashboard
+   .venv-dashboard\Scripts\python.exe -m pip install -r requirements-dashboard.txt
+   ```
 
-### Running dashboard 2 — clinician command
+4. Double-click `run.bat`, or run it from a terminal. Open
+   [http://127.0.0.1:8000](http://127.0.0.1:8000) on this computer. For a phone
+   on the same Wi-Fi, use the `http://<Wi-Fi IPv4 address>:8000` URL printed by
+   the launcher. Keep the launcher window open. If Windows prompts for network
+   access, allow Python on private networks. Guest Wi-Fi or client isolation
+   may prevent phones from reaching other devices on the network.
 
-Before starting it, set `CLINICIAN_EMAIL`, `CLINICIAN_PASSWORD`,
-`DASHBOARD_SESSION_SECRET`, and `ROBOT_API_KEY` to unique values in `.env`.
-The clinician app uses a signed browser session; patient records, summaries,
-and task assignment endpoints return `401` until a clinician signs in.
+`run.bat` applies migrations, ensures the configured bed pool, and starts
+the central server. It does not seed demonstration patients or credentials.
+For an **existing unversioned** database, first follow
+[database/MIGRATIONS.md](database/MIGRATIONS.md) to back up and rehearse
+the migration. The launcher deliberately refuses an unversioned schema.
 
-```powershell
-cmake --build . --target clinician
-```
+### Demo and validation
 
-Open **http://localhost:8002**. It shares the same SQLite/Postgres database
-as Reception, so newly admitted patients appear automatically. Assignments
-are stored in FIFO order (urgent visits are selected first). The robot-side
-controller can claim the next job with `POST /api/robot/tasks/next`, using
-an `X-Anna-Robot-Key` header, and complete it with
-`POST /api/robot/tasks/{task_id}/complete`. A successful completion writes a
-timestamped medical summary, sensor values, and ECG note to the protected
-clinical record, then returns `return_to_home: true` as the controller's
-instruction to perform its configured home-position routine.
+`database.seed_data` is restricted to an empty database and requires
+`SEED_DOCTOR_PASSWORD`, `SEED_RECEPTION_PASSWORD`, and
+`SEED_PATIENT_PIN` in the environment. It creates fictional demonstration
+records; never run it against patient data. Generated demo checkups require
+`ENABLE_DEMO_SIMULATION=true`, remain labelled simulated, and are excluded
+from clinical trends and threshold alerts.
 
-The current robot prototype does not yet contain map/localisation or a
-hardware-specific home-position routine. Those must be calibrated to the
-actual ward, motor encoders, and safety sensors before enabling unattended
-bed navigation. The dashboard/API safely provides the visit sequencing and
-record workflow; connect its robot endpoints only after that physical
-navigation layer has been validated. The camera panel is a local preview,
-not a deployed video-conferencing service; connect it to the hospital's
-approved, encrypted telehealth provider before any patient use.
-
-### Running dashboard 3 — patient portal
+The test suite uses disposable PostgreSQL databases and does not write to
+the configured hospital database:
 
 ```powershell
-cmake --build . --target patient
+.venv-dashboard\Scripts\python.exe -m unittest discover -s tests -v
+node --check dashboards/clinician/static/app.js
 ```
 
-Open **http://localhost:8003**. Patients sign in using their patient ID and
-the private six-digit access PIN issued at reception (or re-issued by a
-signed-in clinician through Patient Record Search). An ID alone is not a
-password. The portal only exposes the signed-in patient's friendly ANNA
-summaries and recorded visit values; clinician-facing observations remain
-within the clinician dashboard.
-
-### Running dashboard 1
-
-By default the dashboard uses **SQLite** - a single file on disk, no
-server to install or run. That's the right choice for developing/testing
-on one machine, which is where you are right now:
-
-```bash
-cp .env.example .env      # DB_ENGINE=sqlite by default - nothing else to set up
-
-mkdir build && cd build
-cmake ..
-cmake --build . --target receptionist
-```
-
-That one command creates `.venv-dashboard`, installs
-`requirements-dashboard.txt` into it, creates/seeds the schema (a fresh
-`anna_dashboard.db` file appears in the project root), and starts the
-dashboard at **http://localhost:8001**. Re-running it later is safe - each
-step only does work that hasn't already been done.
-
-**Switching to Postgres**, once you actually have multiple dashboards on
-different machines that need to share the same live data: set
-`DB_ENGINE=postgres` in `.env`, fill in the `POSTGRES_*` values, then run
-`cmake --build . --target db-up` first (starts Postgres via Docker if
-installed) before `init-db` / `receptionist`. Nothing else in the code
-changes - same models, same queries, same app.
-
-Other useful targets: `cmake --build . --target db-up` /
-`db-down` (Postgres only), `cmake --build . --target
-init-db` (just create/seed the schema).
-
-Manual equivalent, without CMake:
-
-```bash
-python3 -m venv .venv-dashboard && source .venv-dashboard/bin/activate
-pip install -r requirements-dashboard.txt
-python -m dashboards.init_db
-uvicorn dashboards.receptionist.main:app --host 0.0.0.0 --port 8001
-```
-
-**On Windows:**
-
-```powershell
-python -m venv .venv-dashboard
-.venv-dashboard\Scripts\python.exe -m pip install -r requirements-dashboard.txt
-.venv-dashboard\Scripts\python.exe -m dashboards.init_db
-.venv-dashboard\Scripts\python.exe -m uvicorn dashboards.receptionist.main:app --host 0.0.0.0 --port 8001
-```
-
-### Configuration
-
-All new variables (on top of the robot's existing ones) live in
-`.env.example`: `DB_ENGINE` (`sqlite` or `postgres`), `SQLITE_PATH`,
-`POSTGRES_HOST/PORT/DB/USER/PASSWORD` (only read when `DB_ENGINE=postgres`),
-`HOSPITAL_TOTAL_BEDS` (beds seeded on first run - raising it later is
-safe, lowering it won't remove existing beds), `PATIENT_ID_PREFIX` (e.g.
-`ANP` -> `ANP-00001`), and `RECEPTIONIST_PORT`.
-
-### A known limitation worth knowing about
-
-The robot currently treats the `known_faces/<folder name>` as the
-patient's display name directly (see `known_faces/README.md`) - there's no
-concept of "patient ID" inside `anna_robot/` yet. The receptionist
-dashboard writes the patient's real database ID into Postgres regardless,
-but ANNA itself won't know a patient's ID, height/weight/blood group, or
-bed number until `anna_robot/perception/face_identifier.py` and
-`robot.py` are wired up to read from this same database - a natural next
-step once dashboard 2 (clinician) needs to look up patients by ID anyway.
+`/api/health` shows process health; `/api/ready` verifies PostgreSQL and
+migration revision. Clinician reports can be printed from Patient Workspace
+or exported as operations CSV. Alert thresholds and estimate assumptions are
+configured in `.env.example`. ANNA observations are assistive screening
+signals and require clinician review.
 
 ## Notes on the companion telemetry link
 

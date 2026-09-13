@@ -10,21 +10,113 @@ import secrets
 import shutil
 import tempfile
 from typing import List, Optional
+import cv2
+import numpy as np
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from dashboards.common.config import config
 from dashboards.common.database import get_db
-from dashboards.common.models import Bed, Patient, AuditLog
+from dashboards.common.models import Bed, Patient, AuditLog, User
 from dashboards.receptionist.face_check import count_faces
-from ..auth import hash_password
-from ..schemas import BedResponse, PatientResponseModel
+from ..auth import hash_password, require_role
+from ..schemas import BedResponse, PatientResponseModel, TaskCreateRequest
+from pydantic import BaseModel
 from ..websocket import ws_manager
 
 logger = logging.getLogger("anna.receptionist")
-router = APIRouter(prefix="/api", tags=["receptionist"])
+router = APIRouter(prefix="/api", tags=["receptionist"], dependencies=[Depends(require_role("receptionist", "admin"))])
+
+
+class AssignmentRequest(BaseModel):
+    bed_number: int | None = None
+    doctor_id: int | None = None
+
+
+@router.get("/receptionist/doctors")
+def available_doctors(db: Session = Depends(get_db)):
+    return [{"id": u.id, "name": u.full_name} for u in db.query(User).filter(User.role == "doctor", User.is_active.is_(True)).order_by(User.full_name).all()]
+
+
+@router.get("/receptionist/patients")
+def operational_patients(query: str = "", ward: str = "all", status: str = "all",
+                         page: int | None = Query(default=None, ge=1),
+                         page_size: int = Query(default=20, ge=1, le=100),
+                         db: Session = Depends(get_db)):
+    """Patient directory restricted to information needed for reception operations."""
+    records = db.query(Patient).order_by(Patient.admission_date.desc())
+    if query.strip():
+        term = f"%{query.strip()}%"
+        criteria = Patient.patient_code.ilike(term) | Patient.full_name.ilike(term) | Patient.phone.ilike(term)
+        if query.strip().isdigit():
+            criteria = criteria | (Patient.bed_number == int(query.strip()))
+        records = records.filter(criteria)
+    if ward != "all":
+        if ward not in {"Ward A", "Ward B"}:
+            raise HTTPException(status_code=422, detail="Unknown ward.")
+        records = records.join(Bed, Bed.bed_number == Patient.bed_number).filter(Bed.ward == ward)
+    if status != "all":
+        if status not in {"admitted", "discharged"}:
+            raise HTTPException(status_code=422, detail="Unknown patient status.")
+        records = records.filter(Patient.status == status)
+    total = records.count() if page is not None else None
+    selected = records.offset((page - 1) * page_size).limit(page_size).all() if page is not None else records.limit(100).all()
+    items = [
+        {"patient_code": p.patient_code, "full_name": p.full_name,
+         "gender": p.gender, "blood_group": p.blood_group,
+         "bed_number": p.bed_number, "admission_date": p.admission_date,
+         "status": p.status, "assigned_doctor_id": p.assigned_doctor_id}
+        for p in selected
+    ]
+    if page is not None:
+        return {"items": items, "total": total, "page": page, "page_size": page_size,
+                "pages": (total + page_size - 1) // page_size}
+    return items
+
+
+@router.patch("/receptionist/patients/{patient_code}/assignment")
+async def update_assignment(patient_code: str, payload: AssignmentRequest, request: Request, db: Session = Depends(get_db)):
+    patient = db.query(Patient).filter(Patient.patient_code == patient_code.strip().upper(), Patient.status == "admitted").first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Admitted patient not found.")
+    if payload.doctor_id is not None:
+        doctor = db.query(User).filter(User.id == payload.doctor_id, User.role == "doctor", User.is_active.is_(True)).first()
+        if not doctor:
+            raise HTTPException(status_code=422, detail="Selected doctor is unavailable.")
+        patient.assigned_doctor_id = doctor.id
+    if payload.bed_number is not None and payload.bed_number != patient.bed_number:
+        new_bed = db.query(Bed).filter(Bed.bed_number == payload.bed_number).with_for_update().first()
+        if not new_bed or new_bed.is_occupied or new_bed.status != "available":
+            raise HTTPException(status_code=409, detail="Selected bed is unavailable.")
+        old_bed = db.query(Bed).filter(Bed.bed_number == patient.bed_number).with_for_update().first()
+        if old_bed:
+            old_bed.is_occupied = False
+            old_bed.patient_id = None
+            old_bed.status = "available"
+        new_bed.is_occupied = True
+        new_bed.patient_id = patient.id
+        new_bed.status = "occupied"
+        patient.bed_number = new_bed.bed_number
+    db.add(AuditLog(user_id=request.session.get("user_id"), actor_role="receptionist", action="patient_assignment",
+                    entity_type="patient", entity_id=patient.patient_code, source="web",
+                    details=f"Assignment updated for {patient.patient_code}.", timestamp=dt.datetime.utcnow(),
+                    ip_address=request.client.host if request.client else None))
+    db.commit()
+    await ws_manager.broadcast("patient_updated", {"patient_code": patient.patient_code, "bed_number": patient.bed_number})
+    await ws_manager.broadcast("bed_updated", {"bed_number": patient.bed_number})
+    return {"ok": True, "patient_code": patient.patient_code, "bed_number": patient.bed_number,
+            "assigned_doctor_id": patient.assigned_doctor_id}
+
+
+@router.post("/receptionist/tasks")
+async def assign_routine_task(payload: TaskCreateRequest, request: Request, db: Session = Depends(get_db)):
+    """Preserve the existing reception workflow without exposing clinical task APIs."""
+    if payload.task_type != "ANNA Health Check" or payload.priority != "normal":
+        raise HTTPException(status_code=403, detail="Reception may assign routine ANNA health checks only.")
+    from .clinician import create_task
+    return await create_task(payload, request, db)
 
 
 def safe_folder_name(full_name: str) -> str:
@@ -38,6 +130,23 @@ def reference_photo_dir(full_name: str, patient_code: str) -> str:
     if not os.path.exists(candidate):
         return candidate
     return os.path.join(config.known_faces_dir, f"{base} ({patient_code})")
+
+
+async def validated_photo_temp(photo: UploadFile) -> str:
+    if photo.content_type not in {"image/jpeg", "image/png"}:
+        raise HTTPException(status_code=415, detail="Upload a JPEG or PNG patient photo.")
+    content = await photo.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Patient photo exceeds the 5 MB limit.")
+    image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None or not (160 <= image.shape[0] <= 4000 and 160 <= image.shape[1] <= 4000):
+        raise HTTPException(status_code=422, detail="Patient photo is unreadable or outside supported dimensions.")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp:
+        temp_path = temp.name
+    if not cv2.imwrite(temp_path, image):
+        os.remove(temp_path)
+        raise HTTPException(status_code=422, detail="Patient photo could not be processed.")
+    return temp_path
 
 
 @router.get("/receptionist/stats")
@@ -141,10 +250,7 @@ def get_beds(db: Session = Depends(get_db)):
 
 @router.post("/photo-check")
 async def check_uploaded_photo(photo: UploadFile = File(...)):
-    suffix = os.path.splitext(photo.filename or "")[1] or ".jpg"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
-        shutil.copyfileobj(photo.file, temp)
-        temp_path = temp.name
+    temp_path = await validated_photo_temp(photo)
 
     try:
         faces = count_faces(temp_path)
@@ -175,22 +281,33 @@ async def register_patient(
     emergency_contact: Optional[str] = Form(None),
     address: Optional[str] = Form(None),
     bed_number: int = Form(...),
+    assigned_doctor_id: Optional[int] = Form(None),
     photo: UploadFile = File(...),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
+    parsed_birth_date = None
+    if date_of_birth:
+        try:
+            parsed_birth_date = dt.date.fromisoformat(date_of_birth)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Date of birth must use YYYY-MM-DD.")
+        if parsed_birth_date > dt.date.today():
+            raise HTTPException(status_code=422, detail="Date of birth cannot be in the future.")
     # Verify bed availability
     bed = db.query(Bed).filter(Bed.bed_number == bed_number).with_for_update().first()
     if not bed:
         raise HTTPException(status_code=404, detail=f"Bed {bed_number} does not exist.")
-    if bed.is_occupied:
+    if bed.is_occupied or bed.status != "available":
         raise HTTPException(status_code=409, detail=f"Bed {bed_number} is already occupied.")
+    if assigned_doctor_id is not None:
+        doctor = db.query(User).filter(User.id == assigned_doctor_id, User.role == "doctor", User.is_active.is_(True)).first()
+        if not doctor:
+            raise HTTPException(status_code=422, detail="Selected doctor is unavailable.")
 
     # Validate Photo
-    suffix = os.path.splitext(photo.filename or "")[1] or ".jpg"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
-        shutil.copyfileobj(photo.file, temp)
-        temp_path = temp.name
+    suffix = ".jpg"
+    temp_path = await validated_photo_temp(photo)
 
     try:
         face_count = count_faces(temp_path)
@@ -200,9 +317,14 @@ async def register_patient(
                 detail="Photo must contain exactly one clearly visible face.",
             )
     except Exception as e:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
         if isinstance(e, HTTPException):
             raise e
-        raise HTTPException(status_code=400, detail=f"Photo validation failed: {str(e)}")
+        logger.exception("Patient photo validation failed")
+        raise HTTPException(status_code=400, detail="Patient photo could not be validated.")
 
     # Generate 6-digit Portal PIN
     portal_pin = f"{secrets.randbelow(1_000_000):06d}"
@@ -213,6 +335,7 @@ async def register_patient(
         patient_code="PENDING",
         full_name=full_name.strip(),
         date_of_birth=date_of_birth,
+        birth_date=parsed_birth_date,
         gender=gender,
         blood_group=blood_group.strip().upper(),
         height_cm=height_cm,
@@ -222,8 +345,9 @@ async def register_patient(
         address=address.strip() if address else None,
         photo_path="",
         bed_number=bed_number,
+        assigned_doctor_id=assigned_doctor_id,
         admission_date=dt.datetime.utcnow(),
-        portal_pin=portal_pin,
+        portal_pin=None,
         portal_pin_hash=pin_hash,
         status="admitted",
     )
@@ -255,7 +379,16 @@ async def register_patient(
             ip_address=request.client.host if request and request.client else "127.0.0.1",
         )
     )
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            os.remove(target_photo)
+            os.rmdir(target_dir)
+        except OSError:
+            pass
+        raise
     db.refresh(patient)
 
     # Broadcast real-time WebSocket event
@@ -273,7 +406,7 @@ async def register_patient(
         id=patient.id,
         patient_code=patient.patient_code,
         full_name=patient.full_name,
-        date_of_birth=patient.date_of_birth,
+        date_of_birth=patient.birth_date.isoformat() if patient.birth_date else patient.date_of_birth,
         gender=patient.gender,
         blood_group=patient.blood_group,
         height_cm=patient.height_cm,
@@ -281,7 +414,7 @@ async def register_patient(
         phone=patient.phone,
         emergency_contact=patient.emergency_contact,
         address=patient.address,
-        photo_path=patient.photo_path,
+        photo_path=None,
         bed_number=patient.bed_number,
         admission_date=patient.admission_date,
         discharge_date=patient.discharge_date,

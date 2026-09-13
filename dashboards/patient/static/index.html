@@ -8,32 +8,31 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/patient/static/style.css">
+  <link rel="stylesheet" href="/shared/static/shared.css">
 </head>
 <body>
+  <div class="language-control"><label for="portal-language" data-i18n="language">Language</label><select id="portal-language" aria-label="Portal language"><option value="en">English</option><option value="hi">हिन्दी</option><option value="mr">मराठी</option></select></div>
   <!-- Login Overlay -->
   <section id="login-view" class="login-overlay">
     <div class="login-card">
       <div class="login-header">
         <div class="brand-logo">A</div>
-        <h2>Patient Care Portal</h2>
-        <p>Your personal ANNA checkup records & wellness timeline</p>
+        <h2 data-i18n="portalTitle">Patient Care Portal</h2>
+        <p data-i18n="portalSubtitle">Your ANNA checkup records and care history</p>
       </div>
       <form id="portal-login-form">
         <div id="login-error" class="login-error" hidden></div>
         <div class="form-group">
-          <label for="patient_code">Patient ID</label>
+          <label for="patient_code" data-i18n="patientId">Patient ID</label>
           <input type="text" id="patient_code" required placeholder="e.g. ANP-00001" autocomplete="username">
-          <small class="helper-text">Issued during admission at the reception desk.</small>
+          <small class="helper-text" data-i18n="idHelp">Issued during admission at the reception desk.</small>
         </div>
         <div class="form-group">
-          <label for="portal_pin">6-Digit Confidential Access PIN</label>
+          <label for="portal_pin" data-i18n="accessPin">6-digit access PIN</label>
           <input type="password" id="portal_pin" inputmode="numeric" maxlength="6" required placeholder="••••••" autocomplete="current-password">
         </div>
-        <button type="submit" class="btn btn-purple btn-large">View My Health Records</button>
-        <div class="demo-cred-hint">
-          Demo: <code>ANP-00001</code> / PIN: <code>123456</code>
-        </div>
+        <button type="submit" class="btn btn-purple btn-large" data-i18n="viewRecords">View my health records</button>
       </form>
     </div>
   </section>
@@ -57,8 +56,8 @@
           </div>
           <span id="nav-patient-name">Welcome, Patient</span>
         </div>
-        <button id="btn-logout" class="btn btn-outline" style="padding:0.4rem 0.8rem; font-size:0.85rem;">Sign Out</button>
-        <a href="http://localhost:8000" class="hub-link" title="Return to System Hub">
+        <button id="btn-logout" class="btn btn-outline" style="padding:0.4rem 0.8rem; font-size:0.85rem;" data-i18n="signOut">Sign out</button>
+        <a href="/" class="hub-link" title="Return to System Hub">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span>Hub</span>
         </a>
@@ -88,8 +87,8 @@
     <!-- Warm Welcome Card -->
     <div class="welcome-banner">
       <div class="welcome-content">
-        <h2 id="patient-welcome-heading">Welcome, Rohan Verma</h2>
-        <p>Here you can review your recent bedside visits with ANNA, track your vitals over time, and check your prescribed medication schedule.</p>
+        <h2 id="patient-welcome-heading">Welcome</h2>
+        <p data-i18n="welcomeDescription">Review recent ANNA visits, measurements and prescribed medicines.</p>
         <div class="patient-tags" id="patient-tags-container">
           <span class="patient-tag" id="tag-patient-code">ID: ANP-00001</span>
           <span class="patient-tag" id="tag-patient-bed">Bed 01 · Ward A</span>
@@ -101,7 +100,7 @@
 
     <!-- Patient Notice -->
     <div class="patient-notice">
-      ℹ️ <strong>Care Team Note:</strong> ANNA assists your care team by recording helpful observations during rounds. ANNA does not diagnose illnesses. Your doctors and nurses review every reading.
+      ℹ️ <strong data-i18n="careNoteTitle">Care team note:</strong> <span data-i18n="careNote">ANNA records observations during rounds. It does not diagnose illness. Your care team reviews the readings.</span>
     </div>
 
     <main class="main-container">
@@ -130,9 +129,9 @@
       </section>
 
       <!-- SECTION 1: Latest Health Check -->
-      <section class="portal-section">
+      <section class="portal-section" id="latest-section">
         <div class="section-title">
-          <h3>🩺 My Latest Health Readings</h3>
+          <h3 data-i18n="latestReadings">🩺 My latest health readings</h3>
           <span class="recorded-time" id="latest-vitals-time">Recorded on --</span>
         </div>
 
@@ -165,22 +164,23 @@
       </section>
 
       <!-- SECTION 2: Simple Vital Trends -->
-      <section class="portal-section">
+      <section class="portal-section" id="trends-section">
         <div class="section-title">
-          <h3>📊 My Health Progress Chart</h3>
+          <h3 data-i18n="healthProgress">📊 My health progress</h3>
           <span class="helper-text">Visual view of your vitals over past visits</span>
         </div>
         <div class="card chart-card">
           <div class="chart-container">
             <canvas id="patientTrendsChart"></canvas>
           </div>
+          <p id="portal-trend-summary" role="status">Loading recent measurements…</p>
         </div>
       </section>
 
       <!-- SECTION 3: Visit History & Conversations -->
-      <section class="portal-section">
+      <section class="portal-section" id="history-section">
         <div class="section-title">
-          <h3>💬 ANNA Visit History & Notes</h3>
+          <h3 data-i18n="visitHistory">💬 ANNA visit history</h3>
           <span class="helper-text">Friendly summaries from each of your checkups</span>
         </div>
         <div class="history-stream" id="history-stream-container">
@@ -189,9 +189,9 @@
       </section>
 
       <!-- SECTION 4: Prescribed Medications -->
-      <section class="portal-section">
+      <section class="portal-section" id="meds-section">
         <div class="section-title">
-          <h3>💊 My Prescribed Medications</h3>
+          <h3 data-i18n="medications">💊 My prescribed medicines</h3>
           <span class="helper-text">Administered by ward nursing staff</span>
         </div>
         <div class="card table-card">
@@ -242,6 +242,7 @@
     </footer>
   </div>
 
-  <script src="app.js"></script>
+  <script src="/patient/static/app.js"></script>
+  <script src="/patient/static/i18n.js"></script>
 </body>
 </html>

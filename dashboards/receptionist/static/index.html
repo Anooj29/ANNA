@@ -8,11 +8,24 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/receptionist/static/style.css">
+  <link rel="stylesheet" href="/shared/static/shared.css">
 </head>
 <body>
+  <section id="reception-auth" class="reception-auth">
+    <form id="reception-login-form" class="reception-login-card">
+      <h1>ANNA Reception</h1>
+      <p>Sign in to manage admissions and beds.</p>
+      <label for="reception-user">Username or email</label>
+      <input id="reception-user" autocomplete="username" required>
+      <label for="reception-password">Password</label>
+      <input id="reception-password" type="password" autocomplete="current-password" required>
+      <p id="reception-login-error" role="alert" hidden></p>
+      <button type="submit">Sign in</button>
+    </form>
+  </section>
   <!-- Top Navigation Bar -->
-  <header class="topbar">
+  <header class="topbar" hidden>
     <div class="brand">
       <div class="brand-logo" aria-label="ANNA Logo">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 11l6.92.5L12 18"/></svg>
@@ -43,12 +56,13 @@
       </nav>
     </div>
     <div class="header-right">
+      <button id="reception-logout" type="button">Sign out</button>
       <div class="ws-indicator" id="ws-status" title="Real-time WebSocket Sync">
         <span class="pulse-dot"></span>
         <span id="ws-status-text">Live Sync Active</span>
       </div>
       <div class="clock font-mono" id="live-clock">--:--:--</div>
-      <a href="http://localhost:8000" class="hub-link" title="Return to System Hub">
+      <a href="/" class="hub-link" title="Return to System Hub">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span>Hub</span>
       </a>
@@ -56,7 +70,7 @@
   </header>
 
   <!-- Main Container -->
-  <main class="main-container">
+  <main class="main-container" hidden>
     <!-- Top KPI Cards -->
     <section class="kpi-grid">
       <div class="kpi-card">
@@ -292,6 +306,10 @@
             </select>
             <small class="helper-text">Only currently unoccupied beds are listed.</small>
           </div>
+          <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="assigned_doctor_id">Assigned doctor</label>
+            <select id="assigned_doctor_id" name="assigned_doctor_id"><option value="">Assign later</option></select>
+          </div>
 
           <!-- Camera & Face Verification -->
           <div class="camera-module">
@@ -377,6 +395,7 @@
             <!-- Populated via JS -->
           </tbody>
         </table>
+        <div class="table-pager"><button class="btn btn-outline btn-small" id="reception-patients-prev" type="button">Previous</button><span id="reception-patients-page" aria-live="polite"></span><button class="btn btn-outline btn-small" id="reception-patients-next" type="button">Next</button></div>
       </div>
     </section>
   </main>
@@ -442,6 +461,18 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <dialog id="assignment-dialog" class="assignment-dialog">
+    <form id="assignment-form" method="dialog">
+      <h2>Update patient assignment</h2>
+      <p id="assignment-patient"></p>
+      <label for="assignment-doctor">Doctor</label>
+      <select id="assignment-doctor"><option value="">Keep current doctor</option></select>
+      <label for="assignment-bed">Bed</label>
+      <select id="assignment-bed"><option value="">Keep current bed</option></select>
+      <div class="assignment-actions"><button type="button" id="assignment-cancel">Cancel</button><button type="submit">Save assignment</button></div>
+      <p id="assignment-error" role="alert" hidden></p>
+    </form>
+  </dialog>
+  <script src="/receptionist/static/app.js"></script>
 </body>
 </html>

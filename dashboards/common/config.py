@@ -21,17 +21,14 @@ load_dotenv()
 
 @dataclass
 class DashboardConfig:
-    # "sqlite" (default - zero setup, one file on disk, great for local dev
-    # on a single machine) or "postgres" (needed once multiple dashboards
-    # on different machines must share the same live data).
-    db_engine: str = "sqlite"
-    sqlite_path: str = "anna_dashboard.db"
+    # PostgreSQL is the sole supported hospital database.
+    db_engine: str = "postgres"
 
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "anna_hospital"
     postgres_user: str = "anna"
-    postgres_password: str = "anna_dev_password"
+    postgres_password: str = ""
 
     # Shared with anna_robot.config.Config.known_faces_dir - both the robot
     # and this dashboard need to agree on where reference photos live.
@@ -46,24 +43,29 @@ class DashboardConfig:
     # Development credentials. Set both in .env before using this on a real
     # network; sessions are deliberately kept in the browser, not the DB.
     clinician_email: str = "doctor@anna.local"
-    clinician_password: str = "change-me"
-    session_secret: str = "replace-this-with-a-long-random-secret"
-    robot_api_key: str = "change-robot-key"
+    clinician_password: str = ""
+    session_secret: str = ""
+    robot_api_key: str = ""
+    cors_origins: tuple[str, ...] = ()
+    secure_cookies: bool = False
+    enable_demo_simulation: bool = False
+    manual_check_minutes: int = 10
 
     @property
     def database_url(self) -> str:
-        if self.db_engine == "sqlite":
-            return f"sqlite:///{self.sqlite_path}"
-        return (
-            f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+        if self.db_engine != "postgres":
+            raise RuntimeError("ANNA hospital software requires DB_ENGINE=postgres.")
+        from sqlalchemy.engine import URL
+        return URL.create(
+            "postgresql+psycopg2", username=self.postgres_user,
+            password=self.postgres_password, host=self.postgres_host,
+            port=self.postgres_port, database=self.postgres_db,
+        ).render_as_string(hide_password=False)
 
     @classmethod
     def from_env(cls) -> "DashboardConfig":
         return cls(
             db_engine=os.environ.get("DB_ENGINE", cls.db_engine).strip().lower(),
-            sqlite_path=os.environ.get("SQLITE_PATH", cls.sqlite_path),
             postgres_host=os.environ.get("POSTGRES_HOST", cls.postgres_host),
             postgres_port=int(os.environ.get("POSTGRES_PORT", cls.postgres_port)),
             postgres_db=os.environ.get("POSTGRES_DB", cls.postgres_db),
@@ -79,6 +81,10 @@ class DashboardConfig:
             clinician_password=os.environ.get("CLINICIAN_PASSWORD", cls.clinician_password),
             session_secret=os.environ.get("DASHBOARD_SESSION_SECRET", cls.session_secret),
             robot_api_key=os.environ.get("ROBOT_API_KEY", cls.robot_api_key),
+            cors_origins=tuple(origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()),
+            secure_cookies=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
+            enable_demo_simulation=os.environ.get("ENABLE_DEMO_SIMULATION", "false").lower() == "true",
+            manual_check_minutes=int(os.environ.get("MANUAL_CHECK_MINUTES", "10")),
         )
 
 

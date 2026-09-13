@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -65,7 +65,7 @@ class PatientResponseModel(BaseModel):
     phone: Optional[str] = None
     emergency_contact: Optional[str] = None
     address: Optional[str] = None
-    photo_path: str
+    photo_path: Optional[str] = None
     bed_number: Optional[int] = None
     admission_date: dt.datetime
     discharge_date: Optional[dt.datetime] = None
@@ -97,21 +97,45 @@ class TaskResponseModel(BaseModel):
     started_at: Optional[dt.datetime] = None
     completed_at: Optional[dt.datetime] = None
     failure_reason: Optional[str] = None
+    robot_id: Optional[str] = None
+    current_stage: Optional[str] = None
+    stage_updated_at: Optional[dt.datetime] = None
 
 
 # Robot Communication Schemas
 class RobotCompleteRequest(BaseModel):
-    status: str = "completed"
+    status: Literal["completed", "failed"] = "completed"
     temperature_c: Optional[str] = None
     pulse_bpm: Optional[str] = None
-    spo2_percent: Optional[str] = "98.0"
+    spo2_percent: Optional[str] = None
+    temperature_status: Optional[Literal["measured", "poor_signal", "sensor_error", "invalid", "not_available"]] = None
+    pulse_status: Optional[Literal["measured", "poor_signal", "sensor_error", "invalid", "not_available"]] = None
+    spo2_status: Optional[Literal["measured", "poor_signal", "sensor_error", "invalid", "not_available"]] = None
+    temperature_quality: Optional[float] = Field(default=None, ge=0, le=100)
+    pulse_quality: Optional[float] = Field(default=None, ge=0, le=100)
+    spo2_quality: Optional[float] = Field(default=None, ge=0, le=100)
+    robot_id: Optional[str] = Field(default=None, max_length=80)
     ecg_note: Optional[str] = None
-    emotion: Optional[str] = "Neutral"
+    emotion: Optional[str] = None
+    emotion_confidence: Optional[float] = Field(default=None, ge=0, le=1)
     answers: Optional[dict] = None
     clinical_summary: Optional[str] = None
     patient_summary: Optional[str] = None
     summary: Optional[str] = None  # fallback compatibility
     failure_reason: Optional[str] = None
+
+
+class RobotProgressRequest(BaseModel):
+    stage: str = Field(min_length=1, max_length=100)
+    robot_id: Optional[str] = Field(default=None, max_length=80)
+
+
+class RobotHeartbeatRequest(BaseModel):
+    robot_id: str = Field(min_length=1, max_length=80)
+    status: Literal["online", "busy", "unavailable"] = "online"
+    current_task_id: Optional[int] = None
+    battery_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    detail: Optional[str] = Field(default=None, max_length=255)
 
 
 # Alert Schemas
@@ -128,6 +152,14 @@ class AlertResponseModel(BaseModel):
     created_at: dt.datetime
     acknowledged_at: Optional[dt.datetime] = None
     acknowledged_by: Optional[str] = None
+    metric: Optional[str] = None
+    actual_value: Optional[float] = None
+    threshold_value: Optional[float] = None
+    previous_value: Optional[float] = None
+    delta: Optional[float] = None
+    source: Optional[str] = None
+    resolved_at: Optional[dt.datetime] = None
+    resolved_by: Optional[str] = None
 
 
 class AlertAcknowledgeRequest(BaseModel):
@@ -139,7 +171,8 @@ class MedicationCreateRequest(BaseModel):
     medicine_name: str
     dosage: str
     frequency: str
-    scheduled_time: str
+    scheduled_time: str = ""
+    schedule_times: Optional[List[str]] = None
     instructions: str = ""
 
 
@@ -149,6 +182,7 @@ class MedicationResponseModel(BaseModel):
     dosage: str
     frequency: str
     scheduled_time: str
+    schedule_times: Optional[List[str]] = None
     instructions: str
     status: str
     start_date: dt.datetime

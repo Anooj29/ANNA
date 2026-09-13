@@ -7,6 +7,65 @@ let selectedBedNumber = null;
 let mediaStream = null;
 let activeModalBed = null;
 let ws = null;
+let receptionAuthenticated = false;
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+let activeAssignmentCode = null;
+
+function showReceptionApp(allowed) {
+  receptionAuthenticated = allowed;
+  document.getElementById("reception-auth").hidden = allowed;
+  document.querySelector(".topbar").hidden = !allowed;
+  document.querySelector(".main-container").hidden = !allowed;
+  if (allowed) {
+    initWebSocket();
+    loadStats();
+    loadBeds();
+    loadDoctors();
+  } else if (ws) {
+    ws.close();
+  }
+}
+
+async function checkReceptionAuth() {
+  try {
+    const response = await fetch("/api/auth/me");
+    const user = await response.json();
+    showReceptionApp(Boolean(user.authenticated && ["receptionist", "admin"].includes(user.role)));
+  } catch (_) {
+    showReceptionApp(false);
+  }
+}
+
+document.getElementById("reception-login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("reception-login-error");
+  error.hidden = true;
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username_or_email: document.getElementById("reception-user").value.trim(),
+        password: document.getElementById("reception-password").value
+      })
+    });
+    if (!response.ok) throw new Error("Invalid credentials.");
+    const user = await response.json();
+    if (!["receptionist", "admin"].includes(user.role)) {
+      await fetch("/api/auth/logout", { method: "POST" });
+      throw new Error("This account cannot access reception.");
+    }
+    showReceptionApp(true);
+  } catch (failure) {
+    error.textContent = failure.message;
+    error.hidden = false;
+  }
+});
+
+document.getElementById("reception-logout").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  showReceptionApp(false);
+});
 
 let occupancyChartInstance = null;
 let wardDistChartInstance = null;
@@ -49,6 +108,49 @@ const patientSearch = document.getElementById("patient-search");
 const patientWardFilter = document.getElementById("patient-ward-filter");
 const patientStatusFilter = document.getElementById("patient-status-filter");
 const patientTableBody = document.getElementById("patient-table-body");
+
+async function loadDoctors() {
+  const response = await fetch("/api/receptionist/doctors");
+  if (!response.ok) return;
+  const doctors = await response.json();
+  for (const id of ["assigned_doctor_id", "assignment-doctor"]) {
+    const select = document.getElementById(id);
+    select.querySelectorAll("option:not(:first-child)").forEach((item) => item.remove());
+    doctors.forEach((doctor) => {
+      const option = document.createElement("option");
+      option.value = doctor.id;
+      option.textContent = doctor.name;
+      select.appendChild(option);
+    });
+  }
+}
+
+window.openAssignment = function(patientCode) {
+  activeAssignmentCode = patientCode;
+  document.getElementById("assignment-patient").textContent = patientCode;
+  document.getElementById("assignment-doctor").value = "";
+  document.getElementById("assignment-bed").value = "";
+  document.getElementById("assignment-error").hidden = true;
+  document.getElementById("assignment-dialog").showModal();
+};
+
+document.getElementById("assignment-cancel").addEventListener("click", () => document.getElementById("assignment-dialog").close());
+document.getElementById("assignment-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!activeAssignmentCode) return;
+  const doctor = document.getElementById("assignment-doctor").value;
+  const bed = document.getElementById("assignment-bed").value;
+  const error = document.getElementById("assignment-error");
+  try {
+    const response = await fetch(`/api/receptionist/patients/${encodeURIComponent(activeAssignmentCode)}/assignment`, {
+      method: "PATCH", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({doctor_id: doctor ? Number(doctor) : null, bed_number: bed ? Number(bed) : null})
+    });
+    if (!response.ok) throw new Error((await response.json()).detail || "Assignment could not be saved.");
+    document.getElementById("assignment-dialog").close();
+    loadBeds(); loadPatients();
+  } catch (failure) { error.textContent = failure.message; error.hidden = false; }
+});
 
 // ---- Live Clock ----
 function updateClock() {
@@ -116,7 +218,7 @@ function initWebSocket() {
   ws.onclose = () => {
     document.getElementById("ws-status-text").textContent = "Reconnecting...";
     document.getElementById("ws-status").style.background = "#fffbeb";
-    setTimeout(initWebSocket, 3000);
+    if (receptionAuthenticated) setTimeout(initWebSocket, 3000);
   };
 }
 
@@ -150,6 +252,8 @@ async function loadBeds() {
     wardAGrid.innerHTML = "";
     wardBGrid.innerHTML = "";
     bedSelect.innerHTML = '<option value="" disabled selected>Choose an available bed</option>';
+    const assignmentBed = document.getElementById("assignment-bed");
+    assignmentBed.querySelectorAll("option:not(:first-child)").forEach((item) => item.remove());
 
     bedsData.forEach((bed) => {
       const card = document.createElement("div");
@@ -157,11 +261,11 @@ async function loadBeds() {
       card.innerHTML = `
         <div class="bed-top">
           <span class="bed-num">Bed ${String(bed.bed_number).padStart(2, '0')}</span>
-          <span class="bed-badge">${bed.is_occupied ? "Occupied" : "Available"}</span>
+          <span class="bed-badge">${escapeHtml(bed.status)}</span>
         </div>
         <div>
-          <div class="bed-occupant">${bed.occupant_name || "Available for admission"}</div>
-          <div class="bed-code">${bed.occupant_code || bed.bed_type}</div>
+          <div class="bed-occupant">${escapeHtml(bed.occupant_name || "Available for admission")}</div>
+          <div class="bed-code">${escapeHtml(bed.occupant_code || bed.bed_type)}</div>
         </div>
       `;
 
@@ -173,11 +277,13 @@ async function loadBeds() {
         wardBGrid.appendChild(card);
       }
 
-      if (!bed.is_occupied) {
+      if (!bed.is_occupied && bed.status === "available") {
         const opt = document.createElement("option");
         opt.value = bed.bed_number;
         opt.textContent = `Bed ${bed.bed_number} (${bed.ward} - ${bed.bed_type})`;
         bedSelect.appendChild(opt);
+        const assignmentOption = opt.cloneNode(true);
+        assignmentBed.appendChild(assignmentOption);
       }
     });
 
@@ -200,15 +306,15 @@ function handleBedClick(bed) {
         <div class="bed-profile-banner">
           <div class="bed-profile-avatar">👤</div>
           <div class="bed-profile-info">
-            <h4>${bed.occupant_name || "Admitted Patient"}</h4>
-            <p>Patient ID: <strong class="font-mono text-primary">${bed.occupant_code || "--"}</strong></p>
+            <h4>${escapeHtml(bed.occupant_name || "Admitted Patient")}</h4>
+            <p>Patient ID: <strong class="font-mono text-primary">${escapeHtml(bed.occupant_code || "--")}</strong></p>
           </div>
         </div>
 
         <div class="bed-quick-stats">
           <div class="bed-stat-item">
             <span>Assigned Ward</span>
-            <strong>${bed.ward} (${bed.bed_type})</strong>
+            <strong>${escapeHtml(bed.ward)} (${escapeHtml(bed.bed_type)})</strong>
           </div>
           <div class="bed-stat-item">
             <span>Admission Timestamp</span>
@@ -218,7 +324,7 @@ function handleBedClick(bed) {
       </div>
     `;
     bedModal.hidden = false;
-  } else {
+  } else if (bed.status === "available") {
     selectedBedNumber = bed.bed_number;
     bedSelect.value = bed.bed_number;
     switchTab("intake-tab");
@@ -234,16 +340,11 @@ if (modalAssignAnnaAction) {
       modalAssignAnnaAction.disabled = true;
       modalAssignAnnaAction.textContent = "Dispatching...";
       
-      // Look up patient id via patient code
-      const pRes = await fetch(`/api/patients/${activeModalBed.occupant_code}`);
-      if (!pRes.ok) throw new Error("Could not retrieve patient details.");
-      const pData = await pRes.json();
-
-      const taskRes = await fetch("/api/tasks", {
+      const taskRes = await fetch("/api/receptionist/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patient_id: pData.id,
+          patient_code: activeModalBed.occupant_code,
           task_type: "ANNA Health Check",
           instructions: "Scheduled routine vitals checkup via Receptionist Ward Map.",
           priority: "normal"
@@ -402,7 +503,7 @@ intakeForm.addEventListener("submit", async (e) => {
   formData.set("photo", capturedBlob, "enrollment.jpg");
 
   try {
-    const res = await fetch("/api/patients/admit", {
+    const res = await fetch("/api/patients", {
       method: "POST",
       body: formData,
     });
@@ -559,26 +660,26 @@ async function loadReceptionAnalytics() {
 }
 
 // ---- Patient Directory Tab ----
+let receptionPatientsPage = 1;
+let receptionPatientsPages = 1;
 async function loadPatients() {
   const query = patientSearch ? patientSearch.value : "";
   const wardFilter = patientWardFilter ? patientWardFilter.value : "all";
   const statusFilter = patientStatusFilter ? patientStatusFilter.value : "all";
 
   try {
-    const res = await fetch(`/api/patients?query=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/receptionist/patients?query=${encodeURIComponent(query)}&ward=${encodeURIComponent(wardFilter)}&status=${encodeURIComponent(statusFilter)}&page=${receptionPatientsPage}&page_size=20`);
     if (!res.ok) return;
-    let patients = await res.json();
-
-    if (wardFilter !== "all") {
-      patients = patients.filter((p) => {
-        if (!p.bed_number) return false;
-        return wardFilter === "Ward A" ? p.bed_number <= 10 : p.bed_number > 10;
-      });
+    const result = await res.json();
+    receptionPatientsPages = Math.max(1, result.pages);
+    if (receptionPatientsPage > receptionPatientsPages) {
+      receptionPatientsPage = receptionPatientsPages;
+      return loadPatients();
     }
-
-    if (statusFilter !== "all") {
-      patients = patients.filter((p) => p.status === statusFilter);
-    }
+    const patients = result.items;
+    document.getElementById('reception-patients-page').textContent = `Page ${receptionPatientsPage} of ${receptionPatientsPages}`;
+    document.getElementById('reception-patients-prev').disabled = receptionPatientsPage <= 1;
+    document.getElementById('reception-patients-next').disabled = receptionPatientsPage >= receptionPatientsPages;
 
     patientTableBody.innerHTML = "";
     if (patients.length === 0) {
@@ -591,17 +692,19 @@ async function loadPatients() {
       const admStr = p.admission_date ? new Date(p.admission_date).toLocaleDateString() : "--";
       const bedDisplay = p.bed_number ? `Bed ${String(p.bed_number).padStart(2, '0')}` : "--";
       tr.innerHTML = `
-        <td data-label="Patient Code" class="font-mono text-primary" style="font-weight:700;">${p.patient_code}</td>
-        <td data-label="Full Name" style="font-weight:700;">${p.full_name}</td>
-        <td data-label="Gender / Blood">${p.gender} / <strong>${p.blood_group}</strong></td>
+        <td data-label="Patient Code" class="font-mono text-primary" style="font-weight:700;">${escapeHtml(p.patient_code)}</td>
+        <td data-label="Full Name" style="font-weight:700;">${escapeHtml(p.full_name)}</td>
+        <td data-label="Gender / Blood">${escapeHtml(p.gender)} / <strong>${escapeHtml(p.blood_group)}</strong></td>
         <td data-label="Bed">${bedDisplay}</td>
         <td data-label="Admission">${admStr}</td>
-        <td data-label="Status"><span class="status-pill ${p.status}">${p.status}</span></td>
+        <td data-label="Status"><span class="status-pill ${escapeHtml(p.status)}">${escapeHtml(p.status)}</span></td>
         <td data-label="Action">
-          ${p.status === "admitted" ? `<button class="btn btn-secondary" style="padding:0.35rem 0.75rem; font-size:0.8rem;" onclick="dischargeDirect(${p.bed_number}, '${p.full_name}')">Discharge</button>` : `<span style="color:#94a3b8; font-size:0.82rem;">Released</span>`}
+          ${p.status === "admitted" ? `<button class="btn btn-secondary assignment-open" type="button">Assign</button> <button class="btn btn-secondary discharge-direct" type="button">Discharge</button>` : `<span style="color:#94a3b8; font-size:0.82rem;">Released</span>`}
         </td>
       `;
       patientTableBody.appendChild(tr);
+      tr.querySelector(".assignment-open")?.addEventListener("click", () => openAssignment(p.patient_code));
+      tr.querySelector(".discharge-direct")?.addEventListener("click", () => dischargeDirect(p.bed_number, p.full_name));
     });
   } catch (err) {
     console.error("Error loading patients:", err);
@@ -626,13 +729,13 @@ let searchTimeout = null;
 if (patientSearch) {
   patientSearch.addEventListener("input", () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(loadPatients, 300);
+    searchTimeout = setTimeout(() => { receptionPatientsPage = 1; loadPatients(); }, 300);
   });
 }
-if (patientWardFilter) patientWardFilter.addEventListener("change", loadPatients);
-if (patientStatusFilter) patientStatusFilter.addEventListener("change", loadPatients);
+if (patientWardFilter) patientWardFilter.addEventListener("change", () => { receptionPatientsPage = 1; loadPatients(); });
+if (patientStatusFilter) patientStatusFilter.addEventListener("change", () => { receptionPatientsPage = 1; loadPatients(); });
+document.getElementById('reception-patients-prev').addEventListener('click', () => { if (receptionPatientsPage > 1) { receptionPatientsPage--; loadPatients(); } });
+document.getElementById('reception-patients-next').addEventListener('click', () => { if (receptionPatientsPage < receptionPatientsPages) { receptionPatientsPage++; loadPatients(); } });
 
 // Initial Setup
-initWebSocket();
-loadStats();
-loadBeds();
+checkReceptionAuth();

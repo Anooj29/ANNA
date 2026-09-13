@@ -15,12 +15,16 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     Float,
+    JSON,
     ForeignKey,
     Integer,
+    Index,
     String,
     Text,
+    UniqueConstraint,
     event,
 )
 from sqlalchemy.orm import relationship, synonym
@@ -64,6 +68,7 @@ class Patient(Base):
     patient_code = Column(String(20), unique=True, nullable=False, index=True)
     full_name = Column(String(120), nullable=False, index=True)
     date_of_birth = Column(String(20), nullable=True)
+    birth_date = Column(Date, nullable=True)
     gender = Column(String(20), default="Unspecified", nullable=False)
     blood_group = Column(String(5), nullable=False)
     height_cm = Column(Float, nullable=False)
@@ -77,6 +82,7 @@ class Patient(Base):
     face_encoding = Column(Text, nullable=True)
 
     bed_number = Column(Integer, ForeignKey("beds.bed_number"), nullable=True, index=True)
+    assigned_doctor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     admission_date = Column(DateTime, default=dt.datetime.utcnow, nullable=False, index=True)
     discharge_date = Column(DateTime, nullable=True, index=True)
@@ -106,6 +112,7 @@ class Patient(Base):
 class RobotTask(Base):
     """Clinician-requested ANNA bedside tasks."""
     __tablename__ = "robot_tasks"
+    __table_args__ = (Index("ix_robot_tasks_status_assigned_at", "status", "assigned_at"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
@@ -120,6 +127,9 @@ class RobotTask(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     failure_reason = Column(Text, nullable=True)
+    robot_id = Column(String(80), nullable=True, index=True)
+    current_stage = Column(String(100), nullable=True)
+    stage_updated_at = Column(DateTime, nullable=True)
 
     patient = relationship("Patient", back_populates="tasks")
     session = relationship("HealthCheckSession", back_populates="task", uselist=False)
@@ -147,13 +157,21 @@ class HealthCheckSession(Base):
 class VitalReading(Base):
     """Timestamped physiological vital readings."""
     __tablename__ = "vital_readings"
+    __table_args__ = (Index("ix_vital_readings_patient_recorded_at", "patient_id", "recorded_at"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(Integer, ForeignKey("health_check_sessions.id"), nullable=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
-    temperature_c = Column(Float, nullable=False)
-    pulse_bpm = Column(Float, nullable=False)
-    spo2_percent = Column(Float, default=98.0, nullable=False)
+    temperature_c = Column(Float, nullable=True)
+    pulse_bpm = Column(Float, nullable=True)
+    spo2_percent = Column(Float, nullable=True)
+    temperature_status = Column(String(30), default="not_available", nullable=False)
+    pulse_status = Column(String(30), default="not_available", nullable=False)
+    spo2_status = Column(String(30), default="not_available", nullable=False)
+    temperature_quality = Column(Float, nullable=True)
+    pulse_quality = Column(Float, nullable=True)
+    spo2_quality = Column(Float, nullable=True)
+    device_id = Column(String(80), nullable=True)
     ecg_value = Column(String(50), nullable=True)
     ecg_note = Column(String(255), nullable=True)
     recorded_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False, index=True)
@@ -230,6 +248,9 @@ class Medication(Base):
     dosage = Column(String(60), nullable=False)  # e.g. "500 mg"
     frequency = Column(String(60), nullable=False)  # e.g. "Twice daily"
     scheduled_time = Column(String(60), nullable=False)  # e.g. "08:00, 20:00"
+    schedule_times = Column(JSON, nullable=True)
+    prescriber_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow, nullable=True)
     start_date = Column(DateTime, default=dt.datetime.utcnow, nullable=False)
     end_date = Column(DateTime, nullable=True)
     instructions = Column(Text, default="", nullable=False)
@@ -257,6 +278,7 @@ class MedicationLog(Base):
 class Alert(Base):
     """Clinical alerts and risk signals."""
     __tablename__ = "alerts"
+    __table_args__ = (Index("ix_alerts_patient_created_at", "patient_id", "created_at"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
@@ -268,6 +290,16 @@ class Alert(Base):
     acknowledged_at = Column(DateTime, nullable=True)
     acknowledged_by = Column(String(120), nullable=True)
     status = Column(String(20), default="active", nullable=False, index=True)  # active, acknowledged, resolved
+    vital_id = Column(Integer, ForeignKey("vital_readings.id"), nullable=True, index=True)
+    metric = Column(String(30), nullable=True)
+    actual_value = Column(Float, nullable=True)
+    threshold_value = Column(Float, nullable=True)
+    previous_value = Column(Float, nullable=True)
+    delta = Column(Float, nullable=True)
+    source = Column(String(80), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(120), nullable=True)
+    resolution_note = Column(Text, nullable=True)
 
     patient = relationship("Patient", back_populates="alerts")
 
@@ -282,3 +314,60 @@ class AuditLog(Base):
     details = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=dt.datetime.utcnow, nullable=False, index=True)
     ip_address = Column(String(50), nullable=True)
+    actor_role = Column(String(30), nullable=True)
+    entity_type = Column(String(60), nullable=True)
+    entity_id = Column(String(80), nullable=True)
+    source = Column(String(60), nullable=True)
+
+
+class ClinicalNote(Base):
+    __tablename__ = "clinical_notes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    author_name = Column(String(120), nullable=False)
+    content = Column(Text, nullable=False)
+    note_type = Column(String(40), default="progress", nullable=False)
+    related_session_id = Column(Integer, ForeignKey("health_check_sessions.id"), nullable=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow, nullable=False)
+
+
+class RobotStatus(Base):
+    __tablename__ = "robot_statuses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    robot_id = Column(String(80), unique=True, nullable=False, index=True)
+    last_seen_at = Column(DateTime, nullable=False, index=True)
+    status = Column(String(30), default="online", nullable=False)
+    current_task_id = Column(Integer, ForeignKey("robot_tasks.id"), nullable=True)
+    battery_percent = Column(Float, nullable=True)
+    detail = Column(String(255), nullable=True)
+
+
+class AuthAttempt(Base):
+    __tablename__ = "auth_attempts"
+    __table_args__ = (UniqueConstraint("scope", "identifier_hash", "ip_address", name="uq_auth_attempt_identity"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scope = Column(String(20), nullable=False)
+    identifier_hash = Column(String(64), nullable=False)
+    ip_address = Column(String(50), nullable=False)
+    failures = Column(Integer, default=0, nullable=False)
+    first_failure_at = Column(DateTime, nullable=False)
+    blocked_until = Column(DateTime, nullable=True)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
+    alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=True)
+    task_id = Column(Integer, ForeignKey("robot_tasks.id"), nullable=True)
+    event_type = Column(String(40), nullable=False)
+    title = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False, index=True)
+    read_at = Column(DateTime, nullable=True)

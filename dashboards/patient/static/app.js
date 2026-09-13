@@ -1,6 +1,7 @@
 // Patient Portal Application Logic
 
 let patientTrendsChart = null;
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 
 // DOM Elements
 const loginView = document.getElementById("login-view");
@@ -91,7 +92,8 @@ btnLogout.addEventListener("click", async () => {
 
 function renderProfile(profile) {
   navPatientName.textContent = profile.full_name;
-  patientWelcomeHeading.textContent = `Welcome, ${profile.full_name}`;
+  patientWelcomeHeading.textContent = window.portalTranslate?.("welcome", profile.full_name) || `Welcome, ${profile.full_name}`;
+  window.portalPatientName = profile.full_name;
   tagPatientCode.textContent = `ID: ${profile.patient_code}`;
   tagPatientBed.textContent = profile.bed_number ? `Bed ${profile.bed_number}` : "Discharged";
   tagPatientBlood.textContent = `Blood: ${profile.blood_group}`;
@@ -117,7 +119,7 @@ async function loadLatestVitals() {
       return;
     }
 
-    latestVitalsTime.textContent = `Recorded on ${v.recorded_at}`;
+    latestVitalsTime.textContent = `Measured ${v.recorded_at} · ${v.source || "ANNA"} · ${v.freshness_status}`;
     vitalTemp.textContent = v.temperature;
     vitalTempStatus.textContent = v.temperature_status;
 
@@ -128,7 +130,7 @@ async function loadLatestVitals() {
     vitalSpo2Status.textContent = v.spo2_status;
 
     vitalEcg.textContent = v.ecg;
-    vitalEcgStatus.textContent = "Recorded by ECG sensor";
+    vitalEcgStatus.textContent = v.ecg === "Not available" ? "No ECG measurement available" : "Recorded during ANNA visit";
   } catch (err) {
     console.error("Error loading vitals:", err);
   }
@@ -158,14 +160,14 @@ async function loadHistory() {
       card.className = "history-card";
       card.innerHTML = `
         <div class="history-header">
-          <div class="history-date">${item.created_at}</div>
+          <div class="history-date">${escapeHtml(item.created_at)}</div>
           <div class="history-vitals">
-            <span>Temp: <strong>${item.temperature}</strong></span>
-            <span>Pulse: <strong>${item.pulse}</strong></span>
-            <span>SpO2: <strong>${item.spo2}</strong></span>
+            <span>Temp: <strong>${escapeHtml(item.temperature)}</strong></span>
+            <span>Pulse: <strong>${escapeHtml(item.pulse)}</strong></span>
+            <span>SpO2: <strong>${escapeHtml(item.spo2)}</strong></span>
           </div>
         </div>
-        <p class="history-summary-text">${item.patient_summary}</p>
+        <p class="history-summary-text">${escapeHtml(item.patient_summary)}</p>
       `;
       historyStreamContainer.appendChild(card);
     });
@@ -191,11 +193,11 @@ async function loadMedications() {
     meds.forEach((m) => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td data-label="Medication"><strong style="font-size:0.95rem; color:var(--text-main);">${m.medicine_name}</strong></td>
-        <td data-label="Dosage">${m.dosage}</td>
-        <td data-label="Frequency">${m.frequency}</td>
-        <td data-label="Scheduled Time"><span style="font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--primary);">${m.scheduled_time}</span></td>
-        <td data-label="Special Instructions"><small style="color:#64748b;">${m.instructions || 'Take as instructed by nursing staff.'}</small></td>
+        <td data-label="Medication"><strong style="font-size:0.95rem; color:var(--text-main);">${escapeHtml(m.medicine_name)}</strong></td>
+        <td data-label="Dosage">${escapeHtml(m.dosage)}</td>
+        <td data-label="Frequency">${escapeHtml(m.frequency)}</td>
+        <td data-label="Scheduled Time"><span style="font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--primary);">${escapeHtml(m.scheduled_time)}</span></td>
+        <td data-label="Special Instructions"><small style="color:#64748b;">${escapeHtml(m.instructions || 'Take as instructed by nursing staff.')}</small></td>
       `;
       patientMedicationsTable.appendChild(tr);
     });
@@ -205,12 +207,34 @@ async function loadMedications() {
 }
 
 async function loadTrends() {
+  const summary = document.getElementById("portal-trend-summary");
   try {
     const res = await fetch("/api/portal/trends");
-    if (!res.ok) return;
+    if (!res.ok) throw new Error("Trend request failed");
     const trends = await res.json();
 
-    if (trends.length === 0) return;
+    if (trends.length === 0) {
+      summary.textContent = "No recent reliable measurements are available yet.";
+      return;
+    }
+    const measuredTemps = trends.map(t => t.temperature_c).filter(Number.isFinite);
+    const measuredPulses = trends.map(t => t.pulse_bpm).filter(Number.isFinite);
+    const changes = [];
+    if (measuredTemps.length > 1) {
+      const delta = measuredTemps.at(-1) - measuredTemps.at(-2);
+      changes.push(`Temperature ${delta > 0 ? "rose" : delta < 0 ? "fell" : "stayed the same"} by ${Math.abs(delta).toFixed(1)} °C since the previous measured visit`);
+    }
+    if (measuredPulses.length > 1) {
+      const delta = measuredPulses.at(-1) - measuredPulses.at(-2);
+      changes.push(`Pulse ${delta > 0 ? "rose" : delta < 0 ? "fell" : "stayed the same"} by ${Math.abs(delta).toFixed(0)} BPM`);
+    }
+    summary.textContent = changes.length ? `${changes.join(". ")}. Your care team will review these readings.` :
+      "There is not enough reliable history for a comparison yet. Your care team reviews the readings.";
+
+    if (!window.Chart) {
+      summary.textContent += " The chart is temporarily unavailable.";
+      return;
+    }
 
     const ctx = document.getElementById("patientTrendsChart").getContext("2d");
     if (patientTrendsChart) patientTrendsChart.destroy();
@@ -230,6 +254,7 @@ async function loadTrends() {
             borderColor: "#7c3aed",
             backgroundColor: "rgba(124, 58, 237, 0.1)",
             tension: 0.3,
+            spanGaps: false,
             yAxisID: "yTemp",
           },
           {
@@ -238,6 +263,7 @@ async function loadTrends() {
             borderColor: "#0f766e",
             backgroundColor: "rgba(15, 118, 110, 0.1)",
             tension: 0.3,
+            spanGaps: false,
             yAxisID: "yPulse",
           },
         ],
@@ -249,15 +275,11 @@ async function loadTrends() {
           yTemp: {
             type: "linear",
             position: "left",
-            min: 36.0,
-            max: 39.0,
             title: { display: true, text: "Temperature (°C)" },
           },
           yPulse: {
             type: "linear",
             position: "right",
-            min: 55,
-            max: 110,
             grid: { drawOnChartArea: false },
             title: { display: true, text: "Pulse (BPM)" },
           },
@@ -266,6 +288,7 @@ async function loadTrends() {
     });
   } catch (err) {
     console.error("Error loading trends:", err);
+    summary.textContent = "Recent measurements could not be loaded. Please try again later.";
   }
 }
 

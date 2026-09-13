@@ -28,23 +28,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def verify_pin(plain_pin: str, hashed_pin: Optional[str], stored_plain_pin: Optional[str] = None) -> bool:
-    if hashed_pin and verify_password(plain_pin, hashed_pin):
-        return True
-    if stored_plain_pin and hmac.compare_digest(plain_pin.strip(), stored_plain_pin.strip()):
-        return True
-    return False
+def verify_pin(plain_pin: str, hashed_pin: Optional[str]) -> bool:
+    return bool(hashed_pin and verify_password(plain_pin, hashed_pin))
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user_id = request.session.get("user_id")
     if not user_id:
-        # Fallback to check clinician email in session for backwards compatibility
-        user_email = request.session.get("clinician")
-        if user_email:
-            user = db.query(User).filter(User.email == user_email).first()
-            if user:
-                return user
         raise HTTPException(status_code=401, detail="Authentication required.")
     
     user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
@@ -72,5 +62,5 @@ def get_portal_patient(request: Request, db: Session = Depends(get_db)) -> Patie
 
 
 def robot_authorised(x_anna_robot_key: str = Header(default="")) -> None:
-    if not hmac.compare_digest(x_anna_robot_key, config.robot_api_key):
+    if not config.robot_api_key or not hmac.compare_digest(x_anna_robot_key, config.robot_api_key):
         raise HTTPException(status_code=401, detail="Robot API key authorisation failed.")

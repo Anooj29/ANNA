@@ -1104,3 +1104,13 @@ input:focus, select:focus, textarea:focus {
     text-transform: uppercase;
   }
 }
+/* Authentication gate for operational data. */
+.reception-auth { min-height: 100vh; display: grid; place-items: center; background: #f5f8fa; padding: 1.5rem; }
+.reception-auth[hidden], .topbar[hidden], .main-container[hidden] { display: none !important; }
+.reception-login-card { width: min(100%, 400px); background: #fff; border: 1px solid #dce5ec; border-radius: 12px; padding: 2rem; display: grid; gap: .8rem; box-shadow: 0 10px 30px #172b4d12; }
+.reception-login-card h1 { margin: 0; color: #172b4d; }
+.reception-login-card p { margin: 0 0 .6rem; color: #667085; }
+.reception-login-card label { font-weight: 600; }
+.reception-login-card input { min-height: 42px; padding: .6rem; border: 1px solid #98a2b3; border-radius: 6px; }
+.reception-login-card button { min-height: 44px; border: 0; border-radius: 6px; background: #155eef; color: #fff; cursor: pointer; }
+.reception-login-card :focus-visible { outline: 3px solid #0891b2; outline-offset: 2px; }

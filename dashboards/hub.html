@@ -308,19 +308,19 @@
       <div class="brand-icon">A</div>
       <div class="brand-title">
         <h1>ANNA Hospital Management System</h1>
-        <p>Advanced Neural Nursing Automobile · Production Prototype</p>
+        <p>Hospital software · Clinical monitoring and ward operations</p>
       </div>
     </div>
     <div class="status-badge">
       <span class="pulse-dot"></span>
-      <span>PostgreSQL 18.6 Connected · Real-time Feed Active</span>
+      <span>PostgreSQL-backed hospital workspace</span>
     </div>
   </header>
 
   <main>
     <section class="hero">
       <h2>Unified Care Orchestration Platform</h2>
-      <p>An intelligent hospital ward operating system powering autonomous bedside visits, multi-role clinical workflows, and real-time patient telemetry.</p>
+      <p>Patient monitoring, bedside visit coordination, and clear actions for every care role.</p>
     </section>
 
     <div class="portals-grid">
@@ -339,15 +339,11 @@
             <li>Interactive Ward A & B bed grid</li>
             <li>Dual-cascade face intake verification</li>
             <li>Instant ANP-XXXXX and PIN issuance</li>
-            <li>Patient search and one-click discharge</li>
+            <li>Patient search and discharge workflow</li>
           </ul>
         </div>
         <div>
-          <a href="/receptionist" class="btn btn-primary" style="width: 100%;">Open Reception Desk (Port 8001)</a>
-          <div class="credentials-box">
-            Account: <strong>reception@anna.local</strong><br>
-            Password: <strong>reception123</strong>
-          </div>
+          <a href="/receptionist" class="btn btn-primary" style="width: 100%;">Open Reception Desk</a>
         </div>
       </div>
 
@@ -364,17 +360,13 @@
           <p class="portal-desc">Command center for physicians: schedule ANNA bedside visits, track urgent alerts, and inspect vital trend analytics.</p>
           <ul class="portal-features">
             <li>Interactive vital trends (Temp, Pulse, SpO2)</li>
-            <li>ANNA task queue & live demo simulator</li>
+            <li>ANNA visit queue and progress</li>
             <li>Alert center with clinical acknowledgement</li>
             <li>Dual-view observation reports</li>
           </ul>
         </div>
         <div>
-          <a href="/clinician" class="btn btn-teal" style="width: 100%;">Open Clinical Command (Port 8002)</a>
-          <div class="credentials-box">
-            Account: <strong>doctor@anna.local</strong><br>
-            Password: <strong>doctor123</strong>
-          </div>
+          <a href="/clinician" class="btn btn-teal" style="width: 100%;">Open Clinical Workspace</a>
         </div>
       </div>
 
@@ -397,11 +389,7 @@
           </ul>
         </div>
         <div>
-          <a href="/patient" class="btn btn-purple" style="width: 100%;">Open Patient Portal (Port 8003)</a>
-          <div class="credentials-box">
-            Demo ID: <strong>ANP-00001</strong><br>
-            Access PIN: <strong>123456</strong>
-          </div>
+          <a href="/patient" class="btn btn-purple" style="width: 100%;">Open Patient Portal</a>
         </div>
       </div>
     </div>
@@ -426,7 +414,7 @@
         <div class="step-box">
           <span class="step-number">3</span>
           <div class="step-title">ANNA Bedside Checkup</div>
-          <div class="step-desc">Either physical robot claims task or click "Simulate Checkup" to perform the AI vitals & Q&A routine.</div>
+          <div class="step-desc">The independent ANNA robot claims the visit through the authenticated backend API. Demo simulation is available only when explicitly enabled.</div>
         </div>
         <div class="step-box">
           <span class="step-number">4</span>
@@ -443,7 +431,7 @@
   </main>
 
   <footer>
-    ANNA Healthcare Assistant System · Smart India Hackathon (SIH) 2026 Prototype · Powered by PostgreSQL 18.6 & FastAPI
+    ANNA Hospital Software · Smart India Hackathon 2026 · Assistive monitoring for clinician review
   </footer>
 </body>
 </html>

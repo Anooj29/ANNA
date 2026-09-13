@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import secrets
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -75,7 +74,7 @@ def register_patient(
         weight_kg=weight_kg,
         photo_path="",
         patient_code="PENDING",
-        portal_pin=f"{secrets.randbelow(1_000_000):06d}",
+        portal_pin=None,
     )
     db.add(patient)
     db.flush()

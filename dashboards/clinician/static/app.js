@@ -10,6 +10,14 @@ let vitalsChartInstance = null;
 let emotionChartInstance = null;
 let ws = null;
 let ackAlertId = null;
+let demoSimulationEnabled = false;
+let patientsPage = 1;
+let patientsPages = 1;
+let tasksPage = 1;
+let alertsPage = 1;
+let tasksPages = 1;
+let alertsPages = 1;
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 
 // DOM Elements
 const loginView = document.getElementById("login-view");
@@ -62,10 +70,13 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     document.getElementById(tabId).classList.add("active");
 
     if (tabId === "overview-tab") loadPatients();
+    if (tabId === "overview-tab") window.loadPriority?.();
     if (tabId === "analytics-tab") loadClinicianMacroAnalytics();
+    if (tabId === "analytics-tab") window.loadOperations?.();
     if (tabId === "queue-tab") loadTasks();
     if (tabId === "alerts-tab") loadAlerts();
     if (tabId === "reports-tab") loadSummaries();
+    if (tabId === "audit-tab") window.loadAudit?.();
   });
 });
 
@@ -74,9 +85,10 @@ async function checkAuth() {
   try {
     const res = await fetch("/api/auth/me");
     const data = await res.json();
-    if (data.authenticated && data.role === "doctor") {
+    if (data.authenticated && ["doctor", "nurse", "admin"].includes(data.role)) {
       activeUser = data;
-      clinicianName.textContent = data.full_name || "Dr. Sarah Rao, MD";
+      document.getElementById('audit-tab-button').hidden = data.role !== 'admin';
+      clinicianName.textContent = data.full_name || "Clinical user";
       loginView.hidden = true;
       appView.hidden = false;
       initDashboard();
@@ -111,7 +123,13 @@ loginForm.addEventListener("submit", async (e) => {
     }
 
     const user = await res.json();
+    if (!["doctor", "nurse", "admin"].includes(user.role)) {
+      loginError.textContent = "This account does not have clinical workspace access.";
+      loginError.hidden = false;
+      return;
+    }
     activeUser = user;
+    document.getElementById('audit-tab-button').hidden = user.role !== 'admin';
     clinicianName.textContent = user.full_name;
     loginView.hidden = true;
     appView.hidden = false;
@@ -124,6 +142,7 @@ loginForm.addEventListener("submit", async (e) => {
 
 btnLogout.addEventListener("click", async () => {
   await fetch("/api/auth/logout", { method: "POST" });
+  if (ws) ws.close();
   activeUser = null;
   loginView.hidden = false;
   appView.hidden = true;
@@ -144,15 +163,23 @@ function initWebSocket() {
       const msg = JSON.parse(event.data);
       console.log("Clinician WS Event:", msg);
       loadStats();
+      window.loadNotifications?.();
       if (msg.event === "task_created" || msg.event === "task_updated" || msg.event === "checkup_completed") {
         loadTasks();
         loadPatients();
+        window.loadPriority?.();
         if (activeAnalyticsPatientCode) {
           loadPatientAnalytics(activeAnalyticsPatientCode, currentAnalyticsDays);
         }
       }
+      if (msg.event === "patient_admitted" || msg.event === "patient_discharged") {
+        loadPatients();
+        loadPatientOptions();
+        window.loadPriority?.();
+      }
       if (msg.event === "alert_created" || msg.event === "alert_acknowledged") {
         loadAlerts();
+        window.loadPriority?.();
       }
     } catch (e) {
       console.error("WS error:", e);
@@ -161,17 +188,24 @@ function initWebSocket() {
 
   ws.onclose = () => {
     document.getElementById("ws-status-text").textContent = "Reconnecting...";
-    setTimeout(initWebSocket, 3000);
+    if (activeUser) setTimeout(initWebSocket, 3000);
   };
 }
 
 // ---- Initialization ----
 function initDashboard() {
   initWebSocket();
+  fetch("/api/capabilities").then((response) => response.json()).then((capabilities) => {
+    demoSimulationEnabled = Boolean(capabilities.demo_simulation);
+    loadTasks();
+  }).catch(() => {});
   loadStats();
   loadPatients();
+  loadPatientOptions();
   loadTasks();
   loadAlerts();
+  window.loadNotifications?.();
+  window.loadPriority?.();
 }
 
 // ---- Stats KPIs ----
@@ -198,15 +232,43 @@ async function loadStats() {
 }
 
 // ---- Patients Table ----
-async function loadPatients(query = "") {
+async function loadPatientOptions() {
   try {
-    const res = await fetch(`/api/patients?active_only=true&query=${encodeURIComponent(query)}`);
-    if (!res.ok) return;
-    patientsData = await res.json();
-
-    patientsTableBody.innerHTML = "";
+    const response = await fetch('/api/clinician/patient-options');
+    if (!response.ok) return;
+    const patients = await response.json();
+    const selectedTask = taskPatientSelect.value;
+    const selectedReport = summaryPatientFilter.value;
     taskPatientSelect.innerHTML = '<option value="" disabled selected>Select an active patient</option>';
     summaryPatientFilter.innerHTML = '<option value="">All Admitted Patients</option>';
+    patients.forEach(p => {
+      const option = document.createElement('option');
+      option.value = p.patient_code;
+      option.textContent = `${p.full_name} (${p.patient_code} - Bed ${p.bed_number ?? '—'})`;
+      taskPatientSelect.appendChild(option);
+      const reportOption = document.createElement('option');
+      reportOption.value = p.patient_code;
+      reportOption.textContent = `${p.full_name} (${p.patient_code})`;
+      summaryPatientFilter.appendChild(reportOption);
+    });
+    taskPatientSelect.value = selectedTask || '';
+    summaryPatientFilter.value = selectedReport || '';
+  } catch (_) { /* Existing options remain available on transient errors. */ }
+}
+
+async function loadPatients(query = patientFilterInput.value) {
+  try {
+    const res = await fetch(`/api/patients?active_only=true&query=${encodeURIComponent(query)}&page=${patientsPage}&page_size=20`);
+    if (!res.ok) return;
+    const result = await res.json();
+    patientsPages = Math.max(result.pages, 1);
+    if (patientsPage > patientsPages) { patientsPage = patientsPages; return loadPatients(query); }
+    patientsData = result.items;
+    document.getElementById('patients-page-label').textContent = `Page ${patientsPage} of ${patientsPages}`;
+    document.getElementById('patients-prev').disabled = patientsPage <= 1;
+    document.getElementById('patients-next').disabled = patientsPage >= patientsPages;
+
+    patientsTableBody.innerHTML = "";
 
     if (patientsData.length === 0) {
       patientsTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#64748b; padding:2rem;">No matching admitted patients.</td></tr>`;
@@ -214,64 +276,66 @@ async function loadPatients(query = "") {
     }
 
     patientsData.forEach((p) => {
-      // Add to select options
-      const opt = document.createElement("option");
-      opt.value = p.patient_code;
-      opt.textContent = `${p.full_name} (${p.patient_code} - Bed ${p.bed_number || 'N/A'})`;
-      taskPatientSelect.appendChild(opt);
-
-      const sOpt = document.createElement("option");
-      sOpt.value = p.patient_code;
-      sOpt.textContent = `${p.full_name} (${p.patient_code})`;
-      summaryPatientFilter.appendChild(sOpt);
-
       const tr = document.createElement("tr");
       const v = p.latest_vitals;
       tr.innerHTML = `
         <td data-label="Patient">
-          <strong style="color:var(--text-main); font-size:0.95rem;">${p.full_name}</strong><br>
-          <span class="font-mono" style="font-size:0.78rem; color:var(--primary); font-weight:700;">${p.patient_code}</span>
+          <strong style="color:var(--text-main); font-size:0.95rem;">${escapeHtml(p.full_name)}</strong><br>
+          <span class="font-mono" style="font-size:0.78rem; color:var(--primary); font-weight:700;">${escapeHtml(p.patient_code)}</span>
         </td>
         <td data-label="Bed">
           <span class="badge" style="font-size:0.82rem; font-weight:700;">Bed ${p.bed_number ? String(p.bed_number).padStart(2, '0') : '--'}</span>
         </td>
         <td data-label="Temperature">
-          ${v ? `<strong style="color:${parseFloat(v.temperature) >= 38.0 ? 'var(--urgent)' : 'inherit'};">${v.temperature}</strong>` : '<span style="color:#94a3b8;">--</span>'}
+          ${v ? `<strong style="color:${parseFloat(v.temperature) >= 38.0 ? 'var(--urgent)' : 'inherit'};">${escapeHtml(v.temperature)}</strong>` : '<span style="color:#94a3b8;">--</span>'}
         </td>
         <td data-label="Pulse / SpO2">
-          ${v ? `<span>${v.pulse} · <strong style="color:${parseFloat(v.spo2) < 95.0 ? 'var(--urgent)' : 'inherit'};">${v.spo2}</strong></span>` : '<span style="color:#94a3b8;">--</span>'}
+          ${v ? `<span>${escapeHtml(v.pulse)} · <strong style="color:${parseFloat(v.spo2) < 95.0 ? 'var(--urgent)' : 'inherit'};">${escapeHtml(v.spo2)}</strong></span>` : '<span style="color:#94a3b8;">--</span>'}
         </td>
         <td data-label="ECG Rhythm">
-          ${v ? `<span style="font-size:0.8rem; font-weight:600; color:${v.ecg.includes('Irregular') ? 'var(--urgent)' : '#166534'};">${v.ecg}</span>` : '<span style="color:#94a3b8;">--</span>'}
+          ${v ? `<span style="font-size:0.8rem; font-weight:600; color:${v.ecg.includes('Irregular') ? 'var(--urgent)' : '#166534'};">${escapeHtml(v.ecg)}</span>` : '<span style="color:#94a3b8;">--</span>'}
         </td>
         <td data-label="Emotion">
-          ${v ? `<span class="badge" style="font-size:0.78rem;">${v.emotion}</span>` : '<span style="color:#94a3b8;">--</span>'}
+          ${v ? `<span class="badge" style="font-size:0.78rem;">${escapeHtml(v.emotion)}</span>` : '<span style="color:#94a3b8;">--</span>'}
         </td>
         <td data-label="Risk Category">
-          <span class="risk-badge ${p.risk_level}">${p.risk_level}</span>
+          <span class="risk-badge ${escapeHtml(p.risk_level)}">${escapeHtml(p.risk_level)}</span>
         </td>
         <td data-label="Actions">
-          <button class="btn btn-secondary btn-small" onclick="openPatientAnalytics('${p.patient_code}')">Analytics</button>
-          <button class="btn btn-outline btn-small" onclick="openTaskModalFor('${p.patient_code}')">Assign</button>
+          <button class="btn btn-secondary btn-small patient-analytics-action">Analytics</button>
+          <button class="btn btn-primary btn-small patient-open-action">Open</button>
+          <button class="btn btn-outline btn-small patient-task-action">Assign</button>
         </td>
       `;
       patientsTableBody.appendChild(tr);
+      tr.querySelector(".patient-analytics-action").addEventListener("click", () => openPatientAnalytics(p.patient_code));
+      tr.querySelector(".patient-open-action").addEventListener("click", () => openPatientWorkspace(p.patient_code));
+      tr.querySelector(".patient-task-action").addEventListener("click", () => openTaskModalFor(p.patient_code));
     });
   } catch (err) {
     console.error("Error loading patients:", err);
   }
 }
 
+let patientSearchTimer = null;
 patientFilterInput.addEventListener("input", (e) => {
-  loadPatients(e.target.value);
+  clearTimeout(patientSearchTimer);
+  patientSearchTimer = setTimeout(() => { patientsPage = 1; loadPatients(e.target.value); }, 250);
 });
+document.getElementById('patients-prev').addEventListener('click', () => { if (patientsPage > 1) { patientsPage--; loadPatients(); } });
+document.getElementById('patients-next').addEventListener('click', () => { if (patientsPage < patientsPages) { patientsPage++; loadPatients(); } });
 
 // ---- Tasks Table ----
 async function loadTasks() {
   try {
-    const res = await fetch("/api/tasks");
+    const res = await fetch(`/api/tasks?page=${tasksPage}&page_size=20`);
     if (!res.ok) return;
-    tasksData = await res.json();
+    const taskResult = await res.json();
+    tasksData = taskResult.items;
+    tasksPages = Math.max(taskResult.pages, 1);
+    document.getElementById('tasks-page-label').textContent = `Page ${tasksPage} of ${tasksPages}`;
+    document.getElementById('tasks-prev').disabled = tasksPage <= 1;
+    document.getElementById('tasks-next').disabled = tasksPage >= tasksPages;
 
     tasksTableBody.innerHTML = "";
     if (tasksData.length === 0) {
@@ -284,23 +348,24 @@ async function loadTasks() {
       const assignedStr = new Date(t.assigned_at).toLocaleTimeString();
       tr.innerHTML = `
         <td class="font-mono font-bold text-primary">#${t.id}</td>
-        <td><strong>${t.patient_name}</strong><br><small class="font-mono text-muted">${t.patient_code}</small></td>
+        <td><strong>${escapeHtml(t.patient_name)}</strong><br><small class="font-mono text-muted">${escapeHtml(t.patient_code)}</small></td>
         <td>Bed ${t.bed_number || '--'}</td>
         <td>
-          <strong style="font-size:0.85rem;">${t.task_type}</strong><br>
-          <span style="font-size:0.78rem; color:#64748b;">${t.instructions || 'Routine protocol'}</span>
+          <strong style="font-size:0.85rem;">${escapeHtml(t.task_type)}</strong><br>
+          <span style="font-size:0.78rem; color:#64748b;">${escapeHtml(t.current_stage || t.instructions || 'Routine protocol')}</span>
         </td>
-        <td><span class="priority-badge ${t.priority}">${t.priority}</span></td>
-        <td><span class="status-badge-task ${t.status}">${t.status}</span></td>
+        <td><span class="priority-badge ${escapeHtml(t.priority)}">${escapeHtml(t.priority)}</span></td>
+        <td><span class="status-badge-task ${escapeHtml(t.status)}">${escapeHtml(t.status)}</span></td>
         <td style="font-size:0.8rem; color:#64748b;">${assignedStr}</td>
         <td>
           ${t.status === "queued" ? `
-            <button class="btn btn-primary btn-small" title="Simulate ANNA Bedside Checkup" onclick="simulateRobotCheckup(${t.id})">Simulate 🤖</button>
+            ${demoSimulationEnabled ? `<button class="btn btn-primary btn-small" title="Demo simulation only" onclick="simulateRobotCheckup(${t.id})">Demo simulation</button>` : ""}
             <button class="btn btn-secondary btn-small" onclick="cancelTask(${t.id})">Cancel</button>
-          ` : (t.status === "completed" ? `<button class="btn btn-secondary btn-small" onclick="openPatientAnalytics('${t.patient_code}')">View Report</button>` : `<span style="font-size:0.75rem; color:#64748b;">In progress</span>`)}
+          ` : (t.status === "completed" ? `<button class="btn btn-secondary btn-small task-report-action">View Report</button>` : `<span style="font-size:0.75rem; color:#64748b;">${escapeHtml(t.current_stage || t.status)}</span>`)}
         </td>
       `;
       tasksTableBody.appendChild(tr);
+      tr.querySelector(".task-report-action")?.addEventListener("click", () => openPatientWorkspace(t.patient_code));
     });
   } catch (err) {
     console.error("Error loading tasks:", err);
@@ -421,8 +486,8 @@ async function loadPatientAnalytics(patientCode, days = 7) {
         const item = document.createElement("div");
         item.className = "wellness-item";
         item.innerHTML = `
-          <div class="wellness-q">${r.question} <span style="float:right; font-size:0.7rem; color:#94a3b8;">${r.date}</span></div>
-          <div class="wellness-a">${r.answer}</div>
+          <div class="wellness-q">${escapeHtml(r.question)} <span style="float:right; font-size:0.7rem; color:#94a3b8;">${escapeHtml(r.date)}</span></div>
+          <div class="wellness-a">${escapeHtml(r.answer)}</div>
         `;
         wellnessResponsesList.appendChild(item);
       });
@@ -565,11 +630,11 @@ function renderPatientMedications(meds) {
   meds.forEach((m) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${m.medicine_name}</strong></td>
-      <td>${m.dosage}</td>
-      <td>${m.frequency}</td>
-      <td><span class="font-mono">${m.scheduled_time}</span></td>
-      <td><small style="color:#64748b;">${m.instructions || '--'}</small></td>
+      <td><strong>${escapeHtml(m.medicine_name)}</strong></td>
+      <td>${escapeHtml(m.dosage)}</td>
+      <td>${escapeHtml(m.frequency)}</td>
+      <td><span class="font-mono">${escapeHtml(m.scheduled_time)}</span></td>
+      <td><small style="color:#64748b;">${escapeHtml(m.instructions || '--')}</small></td>
       <td><span class="badge" style="color:#166534; background:#dcfce7;">Active</span></td>
     `;
     patientMedsBody.appendChild(tr);
@@ -612,9 +677,14 @@ prescribeForm.addEventListener("submit", async (e) => {
 async function loadAlerts() {
   const status = alertStatusFilter.value;
   try {
-    const res = await fetch(`/api/alerts?status=${status}`);
+    const res = await fetch(`/api/alerts?status=${encodeURIComponent(status)}&page=${alertsPage}&page_size=20`);
     if (!res.ok) return;
-    alertsData = await res.json();
+    const alertResult = await res.json();
+    alertsData = alertResult.items;
+    alertsPages = Math.max(alertResult.pages, 1);
+    document.getElementById('alerts-page-label').textContent = `Page ${alertsPage} of ${alertsPages}`;
+    document.getElementById('alerts-prev').disabled = alertsPage <= 1;
+    document.getElementById('alerts-next').disabled = alertsPage >= alertsPages;
 
     alertsTableBody.innerHTML = "";
     if (alertsData.length === 0) {
@@ -626,27 +696,46 @@ async function loadAlerts() {
       const tr = document.createElement("tr");
       const timeStr = new Date(a.created_at).toLocaleString();
       tr.innerHTML = `
-        <td><span class="risk-badge ${a.severity}">${a.severity}</span></td>
-        <td><strong>${a.patient_name}</strong><br><small class="font-mono text-muted">${a.patient_code}</small></td>
+        <td><span class="risk-badge ${escapeHtml(a.severity)}">${escapeHtml(a.severity)}</span></td>
+        <td><strong>${escapeHtml(a.patient_name)}</strong><br><small class="font-mono text-muted">${escapeHtml(a.patient_code)}</small></td>
         <td>Bed ${a.bed_number || '--'}</td>
         <td>
-          <strong style="font-size:0.85rem;">${a.alert_type}</strong><br>
-          <span style="font-size:0.8rem; color:#334155;">${a.message}</span>
+          <strong style="font-size:0.85rem;">${escapeHtml(a.alert_type)}</strong><br>
+          <span style="font-size:0.8rem; color:#334155;">${escapeHtml(a.message)}</span>
+          <small>Value: ${escapeHtml(a.actual_value ?? '—')} · Threshold: ${escapeHtml(a.threshold_value ?? '—')} · Source: ${escapeHtml(a.source || 'Unknown')}</small>
         </td>
         <td style="font-size:0.78rem; color:#64748b;">${timeStr}</td>
-        <td><span class="status-pill ${a.status}">${a.status}</span></td>
+        <td><span class="status-pill ${escapeHtml(a.status)}">${escapeHtml(a.status)}</span></td>
         <td>
-          ${a.status === "active" ? `<button class="btn btn-secondary btn-small" onclick="openAckModal(${a.id}, '${a.message.replace(/'/g, "\\'")}')">Sign-off ✍️</button>` : `<small style="color:#64748b;">By ${a.acknowledged_by || 'Dr.'}</small>`}
+          ${["active", "new"].includes(a.status) ? `<button class="btn btn-secondary btn-small alert-ack-action">Acknowledge</button>` : ""}
+          ${["active", "new", "acknowledged"].includes(a.status) ? `<button class="btn btn-outline btn-small alert-review-action">Review</button>` : ""}
+          ${["under_review", "acknowledged"].includes(a.status) ? `<button class="btn btn-outline btn-small alert-resolve-action">Resolve</button>` : ""}
+          ${["resolved", "dismissed"].includes(a.status) ? `<small style="color:#64748b;">By ${escapeHtml(a.resolved_by || a.acknowledged_by || 'Care team')}</small>` : ""}
         </td>
       `;
       alertsTableBody.appendChild(tr);
+      tr.querySelector(".alert-ack-action")?.addEventListener("click", () => openAckModal(a.id, a.message));
+      tr.querySelector(".alert-review-action")?.addEventListener("click", () => changeAlertStatus(a.id, "under_review"));
+      tr.querySelector(".alert-resolve-action")?.addEventListener("click", () => changeAlertStatus(a.id, "resolved"));
     });
   } catch (err) {
     console.error("Error loading alerts:", err);
   }
 }
 
-alertStatusFilter.addEventListener("change", loadAlerts);
+async function changeAlertStatus(id, status) {
+  const response = await fetch(`/api/alerts/${id}/status`, {
+    method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({status})
+  });
+  if (!response.ok) { alert("Alert status could not be updated. Try again."); return; }
+  loadAlerts(); window.loadPriority?.();
+}
+
+alertStatusFilter.addEventListener("change", () => { alertsPage = 1; loadAlerts(); });
+document.getElementById('tasks-prev').addEventListener('click', () => { if (tasksPage > 1) { tasksPage--; loadTasks(); } });
+document.getElementById('tasks-next').addEventListener('click', () => { if (tasksPage < tasksPages) { tasksPage++; loadTasks(); } });
+document.getElementById('alerts-prev').addEventListener('click', () => { if (alertsPage > 1) { alertsPage--; loadAlerts(); } });
+document.getElementById('alerts-next').addEventListener('click', () => { if (alertsPage < alertsPages) { alertsPage++; loadAlerts(); } });
 
 window.openAckModal = function(alertId, text) {
   ackAlertId = alertId;
@@ -699,32 +788,35 @@ async function loadSummaries() {
       card.innerHTML = `
         <div class="summary-meta">
           <div>
-            <strong style="font-size:1.1rem;">${s.patient_name}</strong>
-            <span class="font-mono text-primary font-bold" style="margin-left:0.5rem;">${s.patient_code}</span>
+            <strong style="font-size:1.1rem;">${escapeHtml(s.patient_name)}</strong>
+            <span class="font-mono text-primary font-bold" style="margin-left:0.5rem;">${escapeHtml(s.patient_code)}</span>
             <span class="badge" style="margin-left:0.5rem;">Bed ${s.bed_number || '--'}</span>
           </div>
           <div style="font-size:0.8rem; color:#64748b;">
-            Recorded on ${s.created_at} · Author: <strong>${s.author}</strong>
+            Recorded on ${escapeHtml(s.created_at)} · Author: <strong>${escapeHtml(s.author)}</strong>
+            ${s.quality_status === 'simulated' ? '<span class="badge">DEMO SIMULATION</span>' : ''}
           </div>
         </div>
         <div style="display:flex; gap:1.5rem; font-size:0.85rem; margin-bottom:1rem; padding:0.5rem 0.75rem; background:#f8fafc; border-radius:8px;">
-          <span>Temp: <strong>${s.temperature_c || '--'}</strong></span>
-          <span>Pulse: <strong>${s.pulse_bpm || '--'}</strong></span>
-          <span>SpO2: <strong>${s.spo2_percent || '--'}</strong></span>
-          <span>ECG: <strong>${s.ecg_note || '--'}</strong></span>
+          <span>Temp: <strong>${escapeHtml(s.temperature_c || '--')}</strong></span>
+          <span>Pulse: <strong>${escapeHtml(s.pulse_bpm || '--')}</strong></span>
+          <span>SpO2: <strong>${escapeHtml(s.spo2_percent || '--')}</strong></span>
+          <span>ECG: <strong>${escapeHtml(s.ecg_note || '--')}</strong></span>
         </div>
         <div class="summary-dual-grid">
           <div class="summary-col clinical">
-            <h4>🩺 Clinical Observation (Doctor & Nursing View)</h4>
-            <p class="summary-text">${s.clinical_summary}</p>
+            <h4>ANNA Assistive Summary — for clinician review</h4>
+            <p class="summary-text">${escapeHtml(s.clinical_summary)}</p>
           </div>
           <div class="summary-col patient">
             <h4>📱 Patient-Friendly Summary (Patient Portal View)</h4>
-            <p class="summary-text">${s.patient_summary}</p>
+            <p class="summary-text">${escapeHtml(s.patient_summary)}</p>
           </div>
         </div>
+        <button type="button" class="btn btn-outline btn-small summary-source-action">View source data</button>
       `;
       summariesContainer.appendChild(card);
+      card.querySelector('.summary-source-action').addEventListener('click', () => openPatientWorkspace(s.patient_code));
     });
   } catch (err) {
     console.error("Error loading summaries:", err);
@@ -748,14 +840,16 @@ async function loadClinicianMacroAnalytics() {
     riskChartInstance = new Chart(riskCtx, {
       type: "doughnut",
       data: {
-        labels: ["Stable (Normal)", "Monitor (Warning)", "Urgent Review"],
+        labels: ["Stable", "Observe", "Review", "Urgent", "Critical"],
         datasets: [{
           data: [
-            data.risk_distribution.NORMAL || 0,
-            data.risk_distribution.WARNING || 0,
+            data.risk_distribution.STABLE || 0,
+            data.risk_distribution.OBSERVE || 0,
+            data.risk_distribution.REVIEW || 0,
             data.risk_distribution.URGENT || 0,
+            data.risk_distribution.CRITICAL || 0,
           ],
-          backgroundColor: ["#10b981", "#f59e0b", "#ef4444"],
+          backgroundColor: ["#18804a", "#087e91", "#ad6900", "#d36c18", "#c53636"],
           borderWidth: 0,
           hoverOffset: 4
         }]

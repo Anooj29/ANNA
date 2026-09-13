@@ -206,6 +206,15 @@ body {
   gap: 1rem;
 }
 
+@media (max-width: 1500px) and (min-width: 768px) {
+  .topbar { flex-wrap: wrap; row-gap: .7rem; }
+  .header-center { order: 3; width: 100%; overflow-x: auto; }
+  .nav-tabs { justify-content: center; }
+  .header-right { margin-left: auto; }
+  .brand-info p { display: none; }
+  .tab-btn { white-space: nowrap; padding: .55rem .75rem; }
+}
+
 .ws-indicator {
   display: flex;
   align-items: center;
