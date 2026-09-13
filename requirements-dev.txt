@@ -1,0 +1,12 @@
+# Development and test dependencies.
+#
+# The test suite runs with no robot hardware attached: GPIO is simulated,
+# the camera and TFLite models are faked, and no network is used.
+#   pip install -r requirements-dev.txt && pytest
+pytest>=7.4
+pyflakes>=3.0
+
+# The tests need OpenCV and numpy but not the Pi-only packages, so the
+# headless OpenCV wheel is enough on a development machine.
+opencv-python-headless>=4.8
+numpy>=1.24
