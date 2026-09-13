@@ -9,7 +9,11 @@ const portalStrings = {
     careNoteTitle: 'Care team note:',
     careNote: 'ANNA records observations during rounds. It does not diagnose illness. Your care team reviews the readings.',
     latestReadings: '🩺 My latest health readings', healthProgress: '📊 My health progress',
-    visitHistory: '💬 ANNA visit history', medications: '💊 My prescribed medicines'
+    visitHistory: '💬 ANNA visit history', medications: '💊 My prescribed medicines',
+    measured: 'Measured', poor_signal: 'Poor signal', sensor_error: 'Sensor error', not_available: 'Not available',
+    fresh: 'Recent', stale: 'Needs update', noReadings: 'No readings taken yet',
+    noCheckups: 'No completed ANNA checkups on record yet.', noMeds: 'No active medications currently prescribed.',
+    discharged: 'Discharged', active: 'Active'
   },
   hi: {
     language: 'भाषा', idHelp: 'प्रवेश के समय स्वागत कक्ष से दिया जाता है।',
@@ -20,7 +24,11 @@ const portalStrings = {
     careNoteTitle: 'देखभाल टीम का नोट:',
     careNote: 'ANNA देखभाल के दौरान जानकारी दर्ज करता है। यह रोग का निदान नहीं करता। आपकी देखभाल टीम मापों की समीक्षा करती है।',
     latestReadings: '🩺 मेरे नवीनतम स्वास्थ्य माप', healthProgress: '📊 स्वास्थ्य प्रगति',
-    visitHistory: '💬 ANNA मुलाकातों का इतिहास', medications: '💊 मेरी निर्धारित दवाएँ'
+    visitHistory: '💬 ANNA मुलाकातों का इतिहास', medications: '💊 मेरी निर्धारित दवाएँ',
+    measured: 'मापा गया', poor_signal: 'कमजोर सिग्नल', sensor_error: 'सेंसर त्रुटि', not_available: 'उपलब्ध नहीं',
+    fresh: 'हालिया', stale: 'अपडेट आवश्यक', noReadings: 'अभी कोई माप नहीं लिया गया',
+    noCheckups: 'रिकॉर्ड पर अभी कोई पूर्ण ANNA जाँच नहीं है।', noMeds: 'वर्तमान में कोई सक्रिय दवा निर्धारित नहीं है।',
+    discharged: 'डिस्चार्ज', active: 'सक्रिय'
   },
   mr: {
     language: 'भाषा', idHelp: 'रुग्ण दाखल होताना स्वागत कक्षात दिला जातो.',
@@ -31,7 +39,11 @@ const portalStrings = {
     careNoteTitle: 'उपचार पथकाची नोंद:',
     careNote: 'ANNA भेटीदरम्यान निरीक्षणे नोंदवते. ते रोगनिदान करत नाही. तुमचे उपचार पथक मोजमापे तपासते.',
     latestReadings: '🩺 माझी नवीनतम आरोग्य मोजमापे', healthProgress: '📊 आरोग्यातील बदल',
-    visitHistory: '💬 ANNA भेटींचा इतिहास', medications: '💊 माझी लिहून दिलेली औषधे'
+    visitHistory: '💬 ANNA भेटींचा इतिहास', medications: '💊 माझी लिहून दिलेली औषधे',
+    measured: 'मोजले', poor_signal: 'अस्पष्ट सिग्नल', sensor_error: 'सेन्सर त्रुटी', not_available: 'उपलब्ध नाही',
+    fresh: 'ताजे', stale: 'नूतनीकरण आवश्यक', noReadings: 'अजून कोणतीही मोजणी केलेली नाही',
+    noCheckups: 'रेकॉर्डवर अद्याप कोणतीही ANNA तपासणी पूर्ण झालेली नाही.', noMeds: 'सध्या कोणतीही सक्रिय औषधे लिहून दिलेली नाहीत.',
+    discharged: 'डिस्चार्ज', active: 'सक्रिय'
   }
 };
 const portalLanguage = document.getElementById('portal-language');

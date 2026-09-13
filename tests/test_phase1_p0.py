@@ -1,5 +1,4 @@
-"""Isolated smoke/security checks for the initial P0 fixes (stdlib unittest)."""
-
+import datetime as dt
 import os
 import unittest
 
@@ -24,8 +23,12 @@ class Phase1P0Tests(unittest.TestCase):
         from dashboards.common.database import Base, SessionLocal, engine
         from dashboards.common.models import Bed, Patient, RobotTask, User
         from backend.app.auth import hash_password
+        from sqlalchemy import text as sql_text
 
         Base.metadata.create_all(bind=engine)
+        with engine.begin() as conn:
+            conn.execute(sql_text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+            conn.execute(sql_text("INSERT INTO alembic_version (version_num) VALUES ('0006') ON CONFLICT DO NOTHING"))
         with SessionLocal.begin() as db:
             db.add_all([
                 User(username="doctor", email="doctor@test.local", password_hash=hash_password("doctor-pass"), role="doctor", full_name="Test Doctor"),
@@ -217,6 +220,121 @@ class Phase1P0Tests(unittest.TestCase):
                 self.assertEqual(db.get(RobotTask, 2).status, "failed")
                 self.assertEqual(db.query(VitalReading).count(), 1)
 
+    def test_health_and_ready_endpoints(self):
+        with TestClient(self.app) as client:
+            res_health = client.get("/api/health")
+            self.assertEqual(res_health.status_code, 200)
+            self.assertEqual(res_health.json()["backend"], "ok")
+
+            res_ready = client.get("/api/ready")
+            self.assertEqual(res_ready.status_code, 200)
+            self.assertEqual(res_ready.json()["revision"], "0006")
+
+            res_cap = client.get("/api/capabilities")
+            self.assertEqual(res_cap.status_code, 200)
+
+    def test_timeline_pagination_and_event_filtering(self):
+        with TestClient(self.app) as client:
+            client.post("/api/auth/login", json={"username_or_email": "doctor", "password": "doctor-pass"})
+            res = client.get("/api/patients/ANP-00001/timeline?page=1&page_size=2")
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertIn("items", data)
+            self.assertIn("total", data)
+            self.assertEqual(data["page"], 1)
+            self.assertEqual(data["page_size"], 2)
+            self.assertLessEqual(len(data["items"]), 2)
+
+            res_filter = client.get("/api/patients/ANP-00001/timeline?event_type=ADMISSION")
+            self.assertEqual(res_filter.status_code, 200)
+            filtered = res_filter.json()
+            self.assertTrue(all("ADMISSION" in item["event_type"] for item in filtered["items"]))
+
+    def test_alert_lifecycle_expanded(self):
+        from dashboards.common.models import Alert
+        with self.SessionLocal.begin() as db:
+            alert = Alert(patient_id=1, alert_type="Vital Threshold", severity="URGENT",
+                          message="Urgent temperature breach", status="active")
+            db.add(alert)
+            db.flush()
+            alert_id = alert.id
+
+        with TestClient(self.app) as client:
+            # Nurse can move to under_review
+            client.post("/api/auth/login", json={"username_or_email": "nurse", "password": "nurse-pass"})
+            res_review = client.patch(f"/api/alerts/{alert_id}/status", json={"status": "under_review", "note": "Observing"})
+            self.assertEqual(res_review.status_code, 200)
+
+            # Nurse cannot dismiss (requires doctor/admin)
+            res_nurse_dismiss = client.patch(f"/api/alerts/{alert_id}/status", json={"status": "dismissed", "note": "Dismissed"})
+            self.assertEqual(res_nurse_dismiss.status_code, 403)
+
+            # Doctor can dismiss with note
+            client.post("/api/auth/login", json={"username_or_email": "doctor", "password": "doctor-pass"})
+            res_doc_dismiss = client.patch(f"/api/alerts/{alert_id}/status", json={"status": "dismissed", "note": "Doctor dismissed"})
+            self.assertEqual(res_doc_dismiss.status_code, 200)
+            self.assertEqual(res_doc_dismiss.json()["status"], "dismissed")
+
+            # Closed alert cannot transition again
+            res_reclose = client.patch(f"/api/alerts/{alert_id}/status", json={"status": "resolved", "note": "Try re-resolve"})
+            self.assertEqual(res_reclose.status_code, 409)
+
+    def test_patient_reports_and_audit_export(self):
+        with TestClient(self.app) as client:
+            client.post("/api/auth/login", json={"username_or_email": "doctor", "password": "doctor-pass"})
+            
+            # HTML clinical report
+            report_res = client.get("/api/reports/patients/ANP-00001?days=7")
+            self.assertEqual(report_res.status_code, 200)
+            self.assertIn("Test Patient", report_res.text)
+            self.assertIn("ANNA clinical visit report", report_res.text)
+            self.assertEqual(report_res.headers.get("Cache-Control"), "no-store")
+
+            # CSV operations export
+            csv_res = client.get("/api/reports/operations.csv?days=7")
+            self.assertEqual(csv_res.status_code, 200)
+            self.assertIn("text/csv", csv_res.headers.get("content-type"))
+            self.assertIn("Metric,Value", csv_res.text)
+
+            # Admin audit log check
+            client.post("/api/auth/login", json={"username_or_email": "admin", "password": "admin-pass"})
+            audit_res = client.get("/api/admin/audit?limit=20")
+            self.assertEqual(audit_res.status_code, 200)
+            actions = [item["action"] for item in audit_res.json()["items"]]
+            self.assertIn("patient_report_viewed", actions)
+            self.assertIn("operations_csv_exported", actions)
+
+    def test_robot_task_claim_priority_and_heartbeat(self):
+        from dashboards.common.models import RobotTask
+        now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+        with self.SessionLocal.begin() as db:
+            t_normal = RobotTask(patient_id=1, assigned_by="Test Doctor", status="queued", priority="normal", assigned_at=now - dt.timedelta(minutes=10))
+            t_urgent = RobotTask(patient_id=1, assigned_by="Test Doctor", status="queued", priority="urgent", assigned_at=now - dt.timedelta(minutes=5))
+            db.add_all([t_normal, t_urgent])
+
+        with TestClient(self.app) as client:
+            headers = {"X-Anna-Robot-Key": "test-only-robot-key"}
+            claim_res = client.post("/api/robot/tasks/next", headers=headers, json={"robot_id": "ANNA-ROBOT-01"})
+            self.assertEqual(claim_res.status_code, 200)
+            # Urgent task must be prioritized over earlier normal task
+            self.assertEqual(claim_res.json()["priority"], "urgent")
+
+            # Heartbeat update
+            hb_res = client.post("/api/robot/heartbeat", headers=headers, json={
+                "robot_id": "ANNA-ROBOT-01",
+                "status": "online",
+                "battery_percent": 95.0,
+                "current_task_id": claim_res.json()["id"]
+            })
+            self.assertEqual(hb_res.status_code, 200)
+
+            # Clinician views robot status
+            client.post("/api/auth/login", json={"username_or_email": "doctor", "password": "doctor-pass"})
+            status_res = client.get("/api/robot/status")
+            self.assertEqual(status_res.status_code, 200)
+            self.assertTrue(any(r["robot_id"] == "ANNA-ROBOT-01" for r in status_res.json()))
+
 
 if __name__ == "__main__":
     unittest.main()
+

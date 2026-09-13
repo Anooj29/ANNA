@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from dashboards.common.models import Alert, ClinicalNote, MedicalSummary, Medication, Patient, RobotTask, VitalReading
 
 
-def patient_timeline(db: Session, patient: Patient, limit: int = 100) -> list[dict]:
+def get_all_timeline_events(db: Session, patient: Patient) -> list[dict]:
     events = [{"event_type": "ADMISSION", "title": "Patient admitted", "timestamp": patient.admission_date.isoformat(), "source": "Reception"}]
     if patient.discharge_date:
         events.append({"event_type": "DISCHARGE", "title": "Patient discharged", "timestamp": patient.discharge_date.isoformat(), "source": "Reception"})
@@ -30,4 +30,33 @@ def patient_timeline(db: Session, patient: Patient, limit: int = 100) -> list[di
         events.append({"event_type": "CLINICAL_NOTE", "title": "Clinical note added", "timestamp": note.created_at.isoformat(), "source": note.author_name, "related_entity": note.id})
     for summary in db.query(MedicalSummary).filter(MedicalSummary.patient_id == patient.id).all():
         events.append({"event_type": "ANNA_SUMMARY", "title": "ANNA assistive summary available", "timestamp": summary.created_at.isoformat(), "source": "ANNA", "related_entity": summary.id})
-    return sorted(events, key=lambda item: item["timestamp"], reverse=True)[:limit]
+    return sorted(events, key=lambda item: item["timestamp"], reverse=True)
+
+
+def patient_timeline(db: Session, patient: Patient, limit: int = 100) -> list[dict]:
+    return get_all_timeline_events(db, patient)[:limit]
+
+
+def patient_timeline_paged(
+    db: Session,
+    patient: Patient,
+    page: int = 1,
+    page_size: int = 50,
+    event_type: str | None = None,
+) -> dict:
+    events = get_all_timeline_events(db, patient)
+    if event_type:
+        filter_type = event_type.strip().upper()
+        events = [e for e in events if filter_type in e.get("event_type", "").upper()]
+    total = len(events)
+    page_size = max(1, page_size)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    start = max(0, (page - 1) * page_size)
+    items = events[start : start + page_size]
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }

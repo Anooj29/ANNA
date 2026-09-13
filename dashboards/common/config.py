@@ -50,6 +50,7 @@ class DashboardConfig:
     secure_cookies: bool = False
     enable_demo_simulation: bool = False
     manual_check_minutes: int = 10
+    robot_offline_timeout_seconds: int = 120
 
     @property
     def database_url(self) -> str:
@@ -85,6 +86,7 @@ class DashboardConfig:
             secure_cookies=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
             enable_demo_simulation=os.environ.get("ENABLE_DEMO_SIMULATION", "false").lower() == "true",
             manual_check_minutes=int(os.environ.get("MANUAL_CHECK_MINUTES", "10")),
+            robot_offline_timeout_seconds=int(os.environ.get("ROBOT_OFFLINE_TIMEOUT_SECONDS", "120")),
         )
 
 

@@ -186,3 +186,65 @@ class MedicationResponseModel(BaseModel):
     instructions: str
     status: str
     start_date: dt.datetime
+
+
+# Clinical Note Schemas
+class ClinicalNoteCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=10000)
+    note_type: Literal["progress", "assessment", "handover"] = "progress"
+    related_session_id: Optional[int] = None
+
+
+class ClinicalNoteResponseModel(BaseModel):
+    id: int
+    author: str
+    content: str
+    note_type: str
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+# Alert Transition Schema
+class AlertTransitionRequest(BaseModel):
+    status: Literal["under_review", "resolved", "dismissed"]
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+
+# Notification Schemas
+class NotificationResponseModel(BaseModel):
+    id: int
+    event_type: str
+    title: str
+    patient_id: Optional[int] = None
+    alert_id: Optional[int] = None
+    task_id: Optional[int] = None
+    created_at: dt.datetime
+    read_at: Optional[dt.datetime] = None
+
+
+# Timeline Schemas
+class TimelineItemModel(BaseModel):
+    event_type: str
+    title: str
+    timestamp: str
+    source: str
+    severity: Optional[str] = None
+    related_entity: Optional[int] = None
+
+
+class TimelineResponseModel(BaseModel):
+    items: List[TimelineItemModel]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+# Robot Status Schema
+class RobotStatusModel(BaseModel):
+    robot_id: str
+    status: str
+    last_seen_at: dt.datetime
+    current_task_id: Optional[int] = None
+    battery_percent: Optional[float] = None
+

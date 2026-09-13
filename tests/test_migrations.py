@@ -44,7 +44,7 @@ class MigrationTests(unittest.TestCase):
                     row = conn.execute(text("""SELECT temperature_c,temperature_status,pulse_status,spo2_status
                                               FROM vital_readings WHERE patient_id=:id"""), {"id": patient_id}).one()
                     self.assertEqual(tuple(row), (37.1, "measured", "measured", "measured"))
-                    self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), "0005")
+                    self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), "0006")
             finally:
                 stage_engine.dispose()
         finally:

@@ -101,12 +101,13 @@ window.openPatientWorkspace = async function(patientCode) {
     });
     const timelineList = document.getElementById("workspace-timeline");
     timelineList.replaceChildren();
-    timeline.forEach((event) => {
+    const events = Array.isArray(timeline) ? timeline : (timeline.items || []);
+    events.forEach((event) => {
       const li = document.createElement("li");
       workspaceItem(li, event.title, new Date(event.timestamp).toLocaleString(), event.source);
       timelineList.appendChild(li);
     });
-    if (!timeline.length) timelineList.textContent = "No recorded events yet.";
+    if (!events.length) timelineList.textContent = "No recorded events yet.";
     const noteList = document.getElementById("workspace-notes");
     noteList.replaceChildren();
     notes.forEach((note) => workspaceItem(noteList, "CLINICIAN NOTE", note.content, `${note.author} · ${new Date(note.created_at).toLocaleString()}`));

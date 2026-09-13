@@ -26,7 +26,7 @@ class DemoSeedTests(unittest.TestCase):
                 with stage_engine.connect() as conn:
                     before = conn.execute(text("SELECT COUNT(*) FROM patients")).scalar_one()
                     self.assertGreaterEqual(before, 10)
-                    self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), "0005")
+                    self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), "0006")
             finally:
                 stage_engine.dispose()
             again = subprocess.run([sys.executable, "-m", "database.seed_data"], cwd=ROOT, env=env,

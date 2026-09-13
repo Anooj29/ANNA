@@ -49,7 +49,7 @@ async def claim_next_task(
             case((RobotTask.priority == "urgent", 0), else_=1),
             RobotTask.assigned_at.asc(),
         )
-        .with_for_update()
+        .with_for_update(skip_locked=True)
         .first()
     )
     if not task:

@@ -91,7 +91,7 @@ def ready():
         with engine.connect() as conn:
             conn.execute(sql_text("SELECT 1"))
             revision = conn.execute(sql_text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-        if revision != "0005":
+        if revision != "0006":
             return JSONResponse(status_code=503, content={"backend": "ok", "database": "migration_required", "revision": revision})
         return {"backend": "ok", "database": "ok", "revision": revision, "websocket": "ok"}
     except Exception:

@@ -108,6 +108,8 @@ async function loadPortalData() {
   loadTrends();
 }
 
+const tr = (k, fallback) => (window.portalTranslate ? window.portalTranslate(k) : fallback || k);
+
 async function loadLatestVitals() {
   try {
     const res = await fetch("/api/portal/vitals");
@@ -115,22 +117,23 @@ async function loadLatestVitals() {
     const v = await res.json();
 
     if (!v.has_readings) {
-      latestVitalsTime.textContent = "No readings taken yet";
+      latestVitalsTime.textContent = tr("noReadings", "No readings taken yet");
       return;
     }
 
-    latestVitalsTime.textContent = `Measured ${v.recorded_at} · ${v.source || "ANNA"} · ${v.freshness_status}`;
+    const freshness = tr(v.freshness_status, v.freshness_status);
+    latestVitalsTime.textContent = `Measured ${v.recorded_at} · ${v.source || "ANNA"} · ${freshness}`;
     vitalTemp.textContent = v.temperature;
-    vitalTempStatus.textContent = v.temperature_status;
+    vitalTempStatus.textContent = tr(v.temperature_status, v.temperature_status);
 
     vitalPulse.textContent = v.pulse;
-    vitalPulseStatus.textContent = v.pulse_status;
+    vitalPulseStatus.textContent = tr(v.pulse_status, v.pulse_status);
 
     vitalSpo2.textContent = v.spo2;
-    vitalSpo2Status.textContent = v.spo2_status;
+    vitalSpo2Status.textContent = tr(v.spo2_status, v.spo2_status);
 
     vitalEcg.textContent = v.ecg;
-    vitalEcgStatus.textContent = v.ecg === "Not available" ? "No ECG measurement available" : "Recorded during ANNA visit";
+    vitalEcgStatus.textContent = v.ecg === "Not available" ? tr("not_available", "No ECG measurement available") : "Recorded during ANNA visit";
   } catch (err) {
     console.error("Error loading vitals:", err);
   }
@@ -151,7 +154,7 @@ async function loadHistory() {
 
     historyStreamContainer.innerHTML = "";
     if (history.length === 0) {
-      historyStreamContainer.innerHTML = `<div class="card" style="padding:2rem; text-align:center; color:#64748b;">No completed ANNA checkups on record yet.</div>`;
+      historyStreamContainer.innerHTML = `<div class="card" style="padding:2rem; text-align:center; color:#64748b;">${escapeHtml(tr("noCheckups", "No completed ANNA checkups on record yet."))}</div>`;
       return;
     }
 
@@ -186,7 +189,7 @@ async function loadMedications() {
 
     patientMedicationsTable.innerHTML = "";
     if (meds.length === 0) {
-      patientMedicationsTable.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#64748b; padding:1.5rem;">No active prescribed medications.</td></tr>`;
+      patientMedicationsTable.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#64748b; padding:1.5rem;">${escapeHtml(tr("noMeds", "No active prescribed medications."))}</td></tr>`;
       return;
     }
 

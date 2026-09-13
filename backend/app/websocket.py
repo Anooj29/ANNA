@@ -45,7 +45,7 @@ class ConnectionManager:
                                 ("task_id", "patient_code", "patient_name", "bed_number", "status", "priority")
                                 if key in data}
             payload = json.dumps({"event": event_type, "data": visible_data,
-                                  "event_id": str(uuid.uuid4()), "emitted_at": dt.datetime.utcnow().isoformat() + "Z"})
+                                  "event_id": str(uuid.uuid4()), "emitted_at": dt.datetime.now(dt.timezone.utc).isoformat()})
             try:
                 await connection.send_text(payload)
             except Exception:

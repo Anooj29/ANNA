@@ -18,7 +18,7 @@ from dashboards.common.models import Alert, AuditLog, ClinicalNote, HealthCheckS
 from ..auth import require_role
 from ..services.patient_attention import assess_patient, patient_contexts, RANK
 from ..services.patient_analytics import compare_visits, trend_summary
-from ..services.timeline import patient_timeline
+from ..services.timeline import patient_timeline, patient_timeline_paged
 
 router = APIRouter(prefix="/api", tags=["clinical_workspace"], dependencies=[Depends(require_role("doctor", "nurse", "admin"))])
 
@@ -67,15 +67,10 @@ def audit_events(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge
                       for row in rows]}
 
 
-class NoteCreate(BaseModel):
-    content: str = Field(min_length=1, max_length=10000)
-    note_type: Literal["progress", "assessment", "handover"] = "progress"
-    related_session_id: int | None = None
+from ..schemas import AlertTransitionRequest, ClinicalNoteCreate, TimelineResponseModel
 
-
-class AlertTransition(BaseModel):
-    status: Literal["under_review", "resolved", "dismissed"]
-    note: str | None = Field(default=None, max_length=2000)
+NoteCreate = ClinicalNoteCreate
+AlertTransition = AlertTransitionRequest
 
 
 def find_patient(db: Session, code: str) -> Patient:
@@ -101,8 +96,16 @@ def changes(patient_code: str, db: Session = Depends(get_db)):
 
 
 @router.get("/patients/{patient_code}/timeline")
-def timeline(patient_code: str, limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)):
-    return patient_timeline(db, find_patient(db, patient_code), limit)
+def timeline(
+    patient_code: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    limit: int | None = Query(None, ge=1, le=200),
+    event_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    effective_size = limit if limit is not None else page_size
+    return patient_timeline_paged(db, find_patient(db, patient_code), page=page, page_size=effective_size, event_type=event_type)
 
 
 @router.get("/patients/{patient_code}/notes")
@@ -151,8 +154,9 @@ def priority(db: Session = Depends(get_db)):
 @router.get("/robot/status")
 def robot_status(db: Session = Depends(get_db)):
     now = dt.datetime.utcnow()
+    timeout = config.robot_offline_timeout_seconds
     return [{"robot_id": robot.robot_id,
-             "status": robot.status if (now - robot.last_seen_at).total_seconds() < 120 else "offline",
+             "status": robot.status if (now - robot.last_seen_at).total_seconds() < timeout else "offline",
              "last_seen_at": robot.last_seen_at.isoformat(), "current_task_id": robot.current_task_id,
              "battery_percent": robot.battery_percent}
             for robot in db.query(RobotStatus).all()]
@@ -202,7 +206,8 @@ def operations(days: int = Query(7, ge=1, le=30), db: Session = Depends(get_db))
 
 
 @router.get("/reports/patients/{patient_code}", response_class=HTMLResponse)
-def patient_report(patient_code: str, days: int = Query(30, ge=1, le=365),
+def patient_report(patient_code: str, request: Request, days: int = Query(30, ge=1, le=365),
+                   user: User = Depends(require_role("doctor", "nurse", "admin")),
                    db: Session = Depends(get_db)):
     patient = find_patient(db, patient_code)
     since = dt.datetime.utcnow() - dt.timedelta(days=days)
@@ -216,6 +221,18 @@ def patient_report(patient_code: str, days: int = Query(30, ge=1, le=365),
                                          ClinicalNote.created_at >= since).order_by(ClinicalNote.created_at.desc()).all()
     summaries = db.query(MedicalSummary).filter(MedicalSummary.patient_id == patient.id,
                                                 MedicalSummary.created_at >= since).order_by(MedicalSummary.created_at.desc()).all()
+    db.add(AuditLog(
+        user_id=user.id,
+        actor_role=user.role,
+        action="patient_report_viewed",
+        entity_type="patient",
+        entity_id=patient.patient_code,
+        source="web",
+        details=f"Clinical report generated for {patient.patient_code} ({days} days range).",
+        timestamp=dt.datetime.utcnow(),
+        ip_address=request.client.host if request.client else None,
+    ))
+    db.commit()
     def cell(value):
         return escape(str(value)) if value is not None else "Not available"
     def rows(values):
@@ -239,8 +256,22 @@ def patient_report(patient_code: str, days: int = Query(30, ge=1, le=365),
 
 
 @router.get("/reports/operations.csv")
-def operations_csv(days: int = Query(7, ge=1, le=30), db: Session = Depends(get_db)):
+def operations_csv(request: Request, days: int = Query(7, ge=1, le=30),
+                   user: User = Depends(require_role("doctor", "nurse", "admin")),
+                   db: Session = Depends(get_db)):
     values = operations(days, db)
+    db.add(AuditLog(
+        user_id=user.id,
+        actor_role=user.role,
+        action="operations_csv_exported",
+        entity_type="operations",
+        entity_id=f"{days}d",
+        source="web",
+        details=f"Operations CSV exported for past {days} days.",
+        timestamp=dt.datetime.utcnow(),
+        ip_address=request.client.host if request.client else None,
+    ))
+    db.commit()
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Metric", "Value"])
