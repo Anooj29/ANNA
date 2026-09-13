@@ -148,5 +148,8 @@ async def create_patient(
             os.remove(temp_path)
 
 
+# Serve the faces directory so the robot can download new photos.
+app.mount("/known_faces", StaticFiles(directory=config.known_faces_dir), name="faces")
+
 # Serve the static frontend last so it doesn't shadow the /api routes above.
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

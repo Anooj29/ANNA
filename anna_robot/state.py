@@ -8,6 +8,7 @@ from typing import NamedTuple, Tuple
 
 class RobotState(str, Enum):
     STARTUP = "STARTUP"
+    IDLE = "IDLE"
     SEARCH = "SEARCH"
     INTERACT = "INTERACT"
     WAIT_CONFIRM = "WAIT_CONFIRM"

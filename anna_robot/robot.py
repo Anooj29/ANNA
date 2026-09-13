@@ -18,6 +18,7 @@ from .sensors import EcgSensor, SimulatedPulseSensor, TemperatureSensor, Ultraso
 from .state import HEALTH_QUESTIONS, HealthStage, RobotState
 from .telemetry import TelemetryLink
 from .voice import VoiceAssistant
+from .sync_faces import FaceSync
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class HealthcareRobot:
         self.config = config
         self.session = PatientSession()
 
-        self.state: RobotState = RobotState.STARTUP
+        self.state: RobotState = RobotState.IDLE
         self.health_stage: Optional[HealthStage] = None
         self.question_index = 0
         self.greeted = False
@@ -54,6 +55,7 @@ class HealthcareRobot:
 
         self.voice = VoiceAssistant(config.piper_bin_path, config.piper_model_path)
         self.gemini = GeminiAssistant(config.gemini_api_key, config.gemini_model)
+        self.face_sync = FaceSync(config)
 
         self.camera = self._open_camera()
 
@@ -71,8 +73,20 @@ class HealthcareRobot:
         self.speech.start()
         self.voice.speak("Healthcare robot is now active. I am searching for someone I recognise. Please come closer.")
         consecutive_frame_failures = 0
+        last_sync_time = 0
+
         try:
             while True:
+                # Sync new faces every 30 seconds
+                current_time = time.time()
+                if current_time - last_sync_time > 30:
+                    new_faces = self.face_sync.sync()
+                    if new_faces > 0:
+                        # If we got new faces, refresh the FaceIdentifier
+                        self.face_identifier.load_known_faces()
+                        logger.info("Refreshed face database with %d new faces.", new_faces)
+                    last_sync_time = current_time
+
                 ok, frame = self.camera.read()
                 if not ok:
                     consecutive_frame_failures += 1
@@ -125,6 +139,7 @@ class HealthcareRobot:
 
         handlers = {
             RobotState.STARTUP: self._handle_startup,
+            RobotState.IDLE: self._handle_idle,
             RobotState.SEARCH: self._handle_search,
             RobotState.INTERACT: self._handle_interact,
             RobotState.WAIT_CONFIRM: self._handle_wait_confirm,
@@ -134,7 +149,19 @@ class HealthcareRobot:
         handlers[self.state](frame, distance, command)
 
     def _handle_startup(self, frame: np.ndarray, distance: float, command: str) -> None:
-        self.state = RobotState.SEARCH
+        self.state = RobotState.IDLE
+
+    def _handle_idle(self, frame: np.ndarray, distance: float, command: str) -> None:
+        self.motors.stop()
+        # The robot stays IDLE until a command is received via telemetry
+        # If a 'start' command is received, move to SEARCH
+        if isinstance(command, dict) and command.get("command") == "start":
+            logger.info("Robot activated by doctor.")
+            self.voice.speak("I am now activated. Searching for patients.")
+            self.state = RobotState.SEARCH
+        elif command == "start":
+            self.state = RobotState.SEARCH
+
 
     def _handle_search(self, frame: np.ndarray, distance: float, command: str) -> None:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

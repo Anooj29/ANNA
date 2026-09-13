@@ -37,6 +37,12 @@ def send_robot_command(command: dict):
     except Exception as e:
         logger.error("Failed to send command to robot: %s", e)
 
+@app.post("/api/robot/start")
+def start_robot():
+    """Wakes up the robot and sets it to SEARCH state."""
+    send_robot_command({"command": "start"})
+    return {"status": "Robot start command sent"}
+
 @app.get("/api/patients", response_model=list[PatientOut])
 def get_patients(db: Session = Depends(get_db)):
     return crud.list_patients(db)

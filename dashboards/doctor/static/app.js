@@ -70,4 +70,13 @@ document.getElementById('back-btn').onclick = () => {
     document.getElementById('detail-section').classList.add('hidden');
 };
 
+document.getElementById('start-robot-btn').onclick = async () => {
+    const res = await fetch('/api/robot/start', { method: 'POST' });
+    if (res.ok) {
+        alert('Robot activation command sent! ANNA is now searching.');
+    } else {
+        alert('Failed to activate robot.');
+    }
+};
+
 fetchPatients();

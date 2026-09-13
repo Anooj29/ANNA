@@ -44,8 +44,8 @@ class Patient(Base):
 
     registered_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False)
 
-    sessions = relationship("PatientSession", back_populates="patient")
-    assignments = relationship("Assignment", back_populates="patient")
+    # sessions = relationship("PatientSession", primaryjoin="and_(PatientSession.patient_name==Patient.full_name)", foreign_keys="[PatientSession.patient_name]", back_populates="patient")
+    # assignments = relationship("Assignment", back_populates="patient")
 
 
 class PatientSession(Base):
@@ -63,7 +63,7 @@ class PatientSession(Base):
 
     # Link to Patient via name (matching the sync_sessions.py logic)
     # In a real system, we'd use patient_id, but we keep this for now.
-    patient = relationship("Patient", primaryjoin="and_(PatientSession.patient_name==Patient.full_name)", foreign_keys=["patient_name"], overlaps="patient")
+    # patient = relationship("Patient", primaryjoin="and_(PatientSession.patient_name==Patient.full_name)", foreign_keys=["patient_name"], overlaps="patient")
 
 
 class Assignment(Base):
@@ -74,4 +74,4 @@ class Assignment(Base):
     assigned_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False)
     is_completed = Column(Boolean, default=False, nullable=False)
 
-    patient = relationship("Patient", back_populates="assignments")
+    # patient = relationship("Patient", back_populates="assignments")

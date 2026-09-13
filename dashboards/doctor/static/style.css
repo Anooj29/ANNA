@@ -10,6 +10,19 @@
     --success: #28a745;
 }
 
+#controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+#status-bar {
+    font-size: 0.9rem;
+    background: rgba(255,255,255,0.2);
+    padding: 0.25rem 0.75rem;
+    border-radius: 10px;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: var(--bg);
