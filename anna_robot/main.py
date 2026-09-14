@@ -28,6 +28,10 @@ def parse_args() -> argparse.Namespace:
         "--no-debug-window", action="store_true",
         help="Disable the OpenCV debug window (useful for headless / SSH-only runs).",
     )
+    parser.add_argument(
+        "--simulate-hardware", action="store_true",
+        help="Do not use GPIO, motors, ultrasonic, or ECG hardware (software-only test run).",
+    )
     return parser.parse_args()
 
 
@@ -40,6 +44,8 @@ def main() -> None:
         config.tcp_port = args.port
     if args.no_debug_window:
         config.show_debug_window = False
+    if args.simulate_hardware:
+        config.simulate_hardware = True
 
     robot = HealthcareRobot(config)
     robot.run()

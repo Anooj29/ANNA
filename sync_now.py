@@ -1,6 +1,7 @@
-import os
-import sys
-import logging
-import psycopg2
+#!/usr/bin/env python3
+"""One-shot face sync (legacy entry point). Prefer: python3 -m anna_robot.sync_main"""
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: 
+from anna_robot.sync_main import main
+
+if __name__ == "__main__":
+    main()

@@ -62,12 +62,12 @@ class FaceSync:
 
         added_count = 0
         for name, photo_path in new_patients:
-            # Extract the folder name from the path (e.g., "known_faces/Anna/reference.jpg" -> "Anna")
-            # The photo_path is stored as a relative path from the project root.
-            parts = photo_path.split(os.sep)
+            # photo_path is written on Windows (backslashes); normalize before splitting on the Pi.
+            normalized = photo_path.replace("\\", "/")
+            parts = [p for p in normalized.split("/") if p]
             # Usually known_faces/Name/reference.jpg
             if len(parts) >= 2:
-                folder_name = parts[1] # This is the "Anna" part
+                folder_name = parts[1]  # patient folder under known_faces/
                 # Construct the URL to the photo on the laptop
                 url = f"{self.server_url}/{folder_name}/reference.jpg"
                 

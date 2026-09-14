@@ -7,14 +7,13 @@ from typing import Optional
 
 import cv2
 import numpy as np
-import RPi.GPIO as GPIO
 
 from .config import Config
 from .gemini_assistant import GeminiAssistant
-from .motors import MotorController
 from .patient_session import PatientSession
 from .perception import EmotionDetector, FaceIdentifier, PersonDetector, SpeechRecognizer
-from .sensors import EcgSensor, SimulatedPulseSensor, TemperatureSensor, UltrasonicSensor
+from .sensors import SimulatedPulseSensor, TemperatureSensor
+from .simulated import SimulatedEcgSensor, SimulatedMotorController, SimulatedUltrasonicSensor
 from .state import HEALTH_QUESTIONS, HealthStage, RobotState
 from .telemetry import TelemetryLink
 from .voice import VoiceAssistant
@@ -40,14 +39,34 @@ class HealthcareRobot:
         self.telemetry = TelemetryLink(config.tcp_port)
         self.speech = SpeechRecognizer(config.vosk_model_path)
 
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BCM)
+        self._use_gpio = not config.simulate_hardware
+        if config.simulate_hardware:
+            logger.warning(
+                "ROBOT_SIMULATE_HARDWARE is on: motors, ultrasonic, and ECG are simulated "
+                "(distance=%.1f cm). Pulse was already simulated.",
+                config.simulate_distance_cm,
+            )
+            self.motors = SimulatedMotorController()
+            self.ultrasonic = SimulatedUltrasonicSensor(config.simulate_distance_cm)
+            self.ecg_sensor = SimulatedEcgSensor()
+        else:
+            import RPi.GPIO as GPIO
 
-        self.motors = MotorController(config.left_dir_pin, config.left_pwm_pin, config.right_dir_pin, config.right_pwm_pin)
-        self.ultrasonic = UltrasonicSensor(config.trig_pin, config.echo_pin)
+            self._gpio = GPIO
+            GPIO.setwarnings(False)
+            GPIO.setmode(GPIO.BCM)
+
+            from .motors import MotorController
+            from .sensors import EcgSensor, UltrasonicSensor
+
+            self.motors = MotorController(
+                config.left_dir_pin, config.left_pwm_pin, config.right_dir_pin, config.right_pwm_pin
+            )
+            self.ultrasonic = UltrasonicSensor(config.trig_pin, config.echo_pin)
+            self.ecg_sensor = EcgSensor(config.ecg_lo_plus_pin, config.ecg_lo_minus_pin)
+
         self.temperature_sensor = TemperatureSensor()
         self.pulse_sensor = SimulatedPulseSensor()
-        self.ecg_sensor = EcgSensor(config.ecg_lo_plus_pin, config.ecg_lo_minus_pin)
 
         self.person_detector = PersonDetector(config.person_model_path, config.person_detection_threshold)
         self.face_identifier = FaceIdentifier(config.known_faces_dir, config.face_match_threshold)
@@ -387,9 +406,10 @@ class HealthcareRobot:
             self.telemetry.close()
         except Exception:
             logger.exception("Error while closing the telemetry link.")
-        try:
-            GPIO.cleanup()
-        except Exception:
-            logger.exception("Error during GPIO cleanup.")
+        if self._use_gpio:
+            try:
+                self._gpio.cleanup()
+            except Exception:
+                logger.exception("Error during GPIO cleanup.")
         if self.config.show_debug_window:
             cv2.destroyAllWindows()

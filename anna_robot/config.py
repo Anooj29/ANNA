@@ -20,6 +20,10 @@ class Config:
     postgres_password: str = "anna_dev_password"
     photo_server_host: Optional[str] = None
 
+    # Software-only bring-up: skip GPIO, I2C ECG, and real motors (see simulated.py).
+    simulate_hardware: bool = False
+    simulate_distance_cm: float = 40.0
+
     tcp_port: int = 5000
 
     distance_trigger_cm: float = 60.0
@@ -76,6 +80,8 @@ class Config:
             postgres_user=os.environ.get("POSTGRES_USER", cls.postgres_user),
             postgres_password=os.environ.get("POSTGRES_PASSWORD", cls.postgres_password),
             photo_server_host=os.environ.get("PHOTO_SERVER_HOST"),
+            simulate_hardware=_bool("ROBOT_SIMULATE_HARDWARE", cls.simulate_hardware),
+            simulate_distance_cm=_float("ROBOT_SIMULATE_DISTANCE_CM", cls.simulate_distance_cm),
             tcp_port=_int("ROBOT_TCP_PORT", cls.tcp_port),
             distance_trigger_cm=_float("ROBOT_DISTANCE_TRIGGER_CM", cls.distance_trigger_cm),
             safety_stop_cm=_float("ROBOT_SAFETY_STOP_CM", cls.safety_stop_cm),

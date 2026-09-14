@@ -13,6 +13,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+if [ -f ".env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source ".env"
+    set +a
+    echo "[run.sh] Loaded environment from .env"
+fi
+
 VENV_DIR="${VENV_DIR:-.venv}"
 
 if [ ! -d "$VENV_DIR" ]; then
