@@ -13,7 +13,12 @@ from .gemini_assistant import GeminiAssistant
 from .patient_session import PatientSession
 from .perception import EmotionDetector, FaceIdentifier, PersonDetector, SpeechRecognizer
 from .sensors import SimulatedPulseSensor, TemperatureSensor
-from .simulated import SimulatedEcgSensor, SimulatedMotorController, SimulatedUltrasonicSensor
+from .simulated import (
+    SimulatedEcgSensor,
+    SimulatedMotorController,
+    SimulatedUltrasonicSensor,
+    SimulatedVideoCapture,
+)
 from .state import HEALTH_QUESTIONS, HealthStage, RobotState
 from .telemetry import TelemetryLink
 from .voice import VoiceAssistant
@@ -78,7 +83,14 @@ class HealthcareRobot:
 
         self.camera = self._open_camera()
 
-    def _open_camera(self) -> cv2.VideoCapture:
+    def _open_camera(self):
+        if self.config.simulate_camera:
+            logger.warning(
+                "ROBOT_SIMULATE_CAMERA is on: using a blank frame source (no /dev/video). "
+                "Face/person detection will not see anyone until a real camera is connected."
+            )
+            return SimulatedVideoCapture()
+
         for index in self.config.camera_indices:
             cap = cv2.VideoCapture(index, cv2.CAP_V4L2)
             if cap.isOpened():
@@ -86,7 +98,17 @@ class HealthcareRobot:
                 return cap
             cap.release()
             logger.warning("Camera index %d failed to open, trying next...", index)
-        raise RuntimeError(f"Could not open any camera. Checked indices: {self.config.camera_indices}")
+
+        if self.config.simulate_hardware:
+            logger.warning(
+                "No camera opened but ROBOT_SIMULATE_HARDWARE is on — falling back to simulated camera."
+            )
+            return SimulatedVideoCapture()
+
+        raise RuntimeError(
+            f"Could not open any camera. Checked indices: {self.config.camera_indices}. "
+            "Connect a camera module, or set ROBOT_SIMULATE_CAMERA=true for software-only runs."
+        )
 
     def run(self) -> None:
         self.speech.start()

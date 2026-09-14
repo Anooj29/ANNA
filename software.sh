@@ -9,4 +9,5 @@
 set -euo pipefail
 
 export ROBOT_SIMULATE_HARDWARE=true
+export ROBOT_SIMULATE_CAMERA=true
 exec "$(dirname "$0")/run.sh" "$@"

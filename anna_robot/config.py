@@ -23,6 +23,7 @@ class Config:
     # Software-only bring-up: skip GPIO, I2C ECG, and real motors (see simulated.py).
     simulate_hardware: bool = False
     simulate_distance_cm: float = 40.0
+    simulate_camera: bool = False
 
     tcp_port: int = 5000
 
@@ -82,6 +83,7 @@ class Config:
             photo_server_host=os.environ.get("PHOTO_SERVER_HOST"),
             simulate_hardware=_bool("ROBOT_SIMULATE_HARDWARE", cls.simulate_hardware),
             simulate_distance_cm=_float("ROBOT_SIMULATE_DISTANCE_CM", cls.simulate_distance_cm),
+            simulate_camera=_bool("ROBOT_SIMULATE_CAMERA", cls.simulate_camera),
             tcp_port=_int("ROBOT_TCP_PORT", cls.tcp_port),
             distance_trigger_cm=_float("ROBOT_DISTANCE_TRIGGER_CM", cls.distance_trigger_cm),
             safety_stop_cm=_float("ROBOT_SAFETY_STOP_CM", cls.safety_stop_cm),

@@ -32,6 +32,10 @@ def parse_args() -> argparse.Namespace:
         "--simulate-hardware", action="store_true",
         help="Do not use GPIO, motors, ultrasonic, or ECG hardware (software-only test run).",
     )
+    parser.add_argument(
+        "--simulate-camera", action="store_true",
+        help="Use a blank frame source instead of /dev/video (no camera module required).",
+    )
     return parser.parse_args()
 
 
@@ -46,6 +50,8 @@ def main() -> None:
         config.show_debug_window = False
     if args.simulate_hardware:
         config.simulate_hardware = True
+    if args.simulate_camera:
+        config.simulate_camera = True
 
     robot = HealthcareRobot(config)
     robot.run()
