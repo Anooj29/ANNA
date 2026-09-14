@@ -12,6 +12,14 @@ class Config:
     gemini_api_key: Optional[str] = None
     gemini_model: str = "models/gemini-flash-latest"
 
+    # Database / Server
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "anna_hospital"
+    postgres_user: str = "anna"
+    postgres_password: str = "anna_dev_password"
+    photo_server_host: Optional[str] = None
+
     tcp_port: int = 5000
 
     distance_trigger_cm: float = 60.0
@@ -62,6 +70,12 @@ class Config:
         return cls(
             gemini_api_key=os.environ.get("GEMINI_API_KEY"),
             gemini_model=os.environ.get("GEMINI_MODEL", cls.gemini_model),
+            postgres_host=os.environ.get("POSTGRES_HOST", cls.postgres_host),
+            postgres_port=_int("POSTGRES_PORT", cls.postgres_port),
+            postgres_db=os.environ.get("POSTGRES_DB", cls.postgres_db),
+            postgres_user=os.environ.get("POSTGRES_USER", cls.postgres_user),
+            postgres_password=os.environ.get("POSTGRES_PASSWORD", cls.postgres_password),
+            photo_server_host=os.environ.get("PHOTO_SERVER_HOST"),
             tcp_port=_int("ROBOT_TCP_PORT", cls.tcp_port),
             distance_trigger_cm=_float("ROBOT_DISTANCE_TRIGGER_CM", cls.distance_trigger_cm),
             safety_stop_cm=_float("ROBOT_SAFETY_STOP_CM", cls.safety_stop_cm),

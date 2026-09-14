@@ -1,0 +1,30 @@
+PROJECT SUMMARY: ANNA HEALTHCARE ASSISTANT ROBOT
+Date/Time: 14/9/2026, 4:06:22 pm
+---------------------------------------------------------------------------
+
+1. ARCHITECTURE ANALYSIS & COMPARISON
+- Analyzed three versions of the system: 'suraj', 'invictus', and 'anna'.
+- Key Finding: 'Invictus' is the most advanced in terms of physical control (PID loops, cable safety, non-blocking threads). 'Anna' is the most advanced in terms of system orchestration (Hub-and-Spoke model, AWS integration, and Face-Sync pipeline).
+
+2. COMPANION INTERFACE DEVELOPMENT
+- Created a dedicated companion tool at 'C:/Users/bavis/OneDrive/Desktop/anna_companion/companion.py'.
+- This tool allows real-time monitoring of the robot's telemetry (Health Stage, Target Confidence, Drive State) and enables sending voice commands via TCP on port 5000.
+
+3. HARDWARE SIMULATION & BYPASS
+- Resolved GPIO detection crashes on the Raspberry Pi by implementing "Simulation Mode".
+- Provided configuration to run the robot using 'ROBOT_SIMULATE_HARDWARE=true', allowing software and network testing without physical wiring.
+- Configured 'ROBOT_TCP_WAIT_FOR_CLIENT=false' to allow the robot to start without a companion connection.
+
+4. DASHBOARD & BACKEND FIXES
+- Resolved 'ImportError' in the Receptionist Dashboard by moving from standalone script execution to module-based execution (uvicorn).
+- Created and configured '.env' files to ensure the dashboards save data to PostgreSQL instead of local SQLite.
+
+5. AWS CLOUD INTEGRATION
+- Transitioned the database connection from local PostgreSQL to AWS RDS.
+- Implemented SSL requirements ('sslmode=require') and updated credentials to connect the Raspberry Pi to the AWS cloud database.
+- Developed 'sync_now.py', a standalone tool that bypasses the main robot loop to force-sync patient faces from the cloud DB to the local Pi storage.
+
+6. CURRENT STATUS
+- The bridge between the Windows Hub (Dashboards/AWS DB) and the Raspberry Pi (Robot) is now established.
+- The robot can now identify patients and download reference photos directly from the cloud.
+---------------------------------------------------------------------------
