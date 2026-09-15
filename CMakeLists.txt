@@ -83,10 +83,9 @@ install(FILES requirements.txt run.sh README.md DESTINATION share/anna_robot)
 #   cmake --build . --target receptionist
 #
 # That single command creates the dashboard venv, installs its deps,
-# creates/seeds the schema (SQLite by default - no server needed), and
-# starts the dashboard on http://localhost:8001. Set DB_ENGINE=postgres in
-# .env and run 'cmake --build . --target db-up' first if you want Postgres
-# instead.
+# connects to PostgreSQL 18.x (DB_ENGINE=postgres is required), and
+# starts the central application. Run 'cmake --build . --target db-up' if
+# using Docker Postgres.
 # -----------------------------------------------------------------------------
 
 set(DASHBOARD_VENV_DIR ${PROJECT_ROOT}/.venv-dashboard)
@@ -117,9 +116,8 @@ add_custom_target(dashboard-deps
     COMMENT "Installing dashboard dependencies (no C++ build toolchain required)"
 )
 
-# Postgres is optional: the dashboard defaults to SQLite (DB_ENGINE=sqlite
-# in .env.example), which needs no server at all. Only run 'db-up' if
-# you've set DB_ENGINE=postgres.
+# PostgreSQL 18.x is mandatory (DB_ENGINE=postgres).
+# Run 'db-up' to start the local container if not using a host instance.
 if(DOCKER_EXE)
     add_custom_target(db-up
         COMMAND ${DOCKER_EXE} compose up -d postgres
