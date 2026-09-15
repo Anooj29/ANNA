@@ -4,5 +4,6 @@
 # On-board microphone listening, so "Hey ANNA" can be heard in the room as
 # well as forwarded by the companion app. Enable with ROBOT_MIC_ENABLED=true.
 # On a Pi you also need: sudo apt install -y portaudio19-dev
-SpeechRecognition>=3.10
 PyAudio>=0.2.13
+vosk>=0.3.45
+scipy>=1.10

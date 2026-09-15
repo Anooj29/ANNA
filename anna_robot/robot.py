@@ -135,9 +135,10 @@ class HealthcareRobot:
             require_wake_word=config.require_wake_word,
         )
         self.listener = self._track(MicrophoneListener(
-            enabled=config.mic_enabled,
-            device_index=config.mic_device_index,
-            language=config.mic_language,
+        enabled=config.mic_enabled,
+        device_index=config.mic_device_index,
+        language=config.mic_language,
+        model_path=config.vosk_model_path,
         ))
 
         self.motors = self._track(MotorController(

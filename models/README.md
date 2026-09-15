@@ -35,3 +35,22 @@ line. Then set `ROBOT_DETECTION_CLASSES` to the names you want reported.
 
 Both model paths are configurable via `ROBOT_PERSON_MODEL` /
 `ROBOT_EMOTION_MODEL` if you'd rather store them elsewhere.
+## Optional: offline speech recognition
+
+ANNA can use Vosk for offline microphone speech recognition when
+`ROBOT_MIC_ENABLED=true`.
+
+Download the Vosk model:
+
+- `vosk-model-small-en-us-0.15`
+
+Place the extracted model directory here:
+
+`models/vosk-model-small-en-us-0.15/`
+
+The model path can be changed with:
+
+`VOSK_MODEL_PATH=/path/to/vosk-model`
+
+The Vosk model is not committed to this repository because model files can
+be large. The repository only documents the expected model and location.

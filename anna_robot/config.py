@@ -135,7 +135,7 @@ class Config:
     mic_enabled: bool = False
     mic_device_index: Optional[int] = None
     mic_language: str = "en-US"
-
+    vosk_model_path: str = "models/vosk-model-small-en-us-0.15"
     # -- vision output ----------------------------------------------------
     show_debug_window: bool = True
     vision_stream_enabled: bool = True
@@ -252,7 +252,7 @@ class Config:
             mic_enabled=env_bool("ROBOT_MIC_ENABLED", defaults.mic_enabled),
             mic_device_index=env_optional_int("ROBOT_MIC_DEVICE_INDEX", defaults.mic_device_index),
             mic_language=env_str("ROBOT_MIC_LANGUAGE", defaults.mic_language),
-
+            vosk_model_path=env_str("VOSK_MODEL_PATH", defaults.vosk_model_path),
             show_debug_window=env_bool("ROBOT_SHOW_DEBUG_WINDOW", defaults.show_debug_window),
             vision_stream_enabled=env_bool("ROBOT_VISION_STREAM_ENABLED", defaults.vision_stream_enabled),
             vision_stream_host=env_str("ROBOT_VISION_STREAM_HOST", defaults.vision_stream_host),
