@@ -58,7 +58,7 @@ class FollowTuning:
     #: Hard stop: obstacle nearer than this and forward motion is cut.
     safety_stop_cm: float = 25.0
     #: Speed ceiling as a fraction of full scale.
-    max_linear: float = 0.75
+    max_linear: float = 0.5
     max_angular: float = 0.65
     #: Forward speed retained during the hardest turn (0..1). Lower = the
     #: robot slows more to line itself up before driving on.
@@ -83,6 +83,10 @@ class FollowTuning:
             raise ValueError("hold_band_cm, max_linear and max_angular must be positive.")
         if self.range_scale_cm <= 0:
             raise ValueError("range_scale_cm must be positive.")
+
+
+#: Longest time step the follower's slew limits will honour, seconds.
+MAX_SLEW_DT_S = 0.1
 
 
 @dataclass
@@ -278,6 +282,9 @@ class PersonFollower:
         self, linear: float, angular: float, dt: float, state: FollowState, reason: str
     ) -> DriveCommand:
         """Apply the acceleration limits and publish the command."""
+        # Same reasoning as the motor ramp: a long frame gap must not unlock
+        # a full-speed step on the next command.
+        dt = min(dt, MAX_SLEW_DT_S)
         linear = slew(self._command.linear, clamp(linear, -self.tuning.max_linear, self.tuning.max_linear),
                       self.tuning.linear_slew_per_s * dt)
         angular = slew(self._command.angular, clamp(angular, -self.tuning.max_angular, self.tuning.max_angular),

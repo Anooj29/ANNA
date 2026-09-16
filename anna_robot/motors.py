@@ -36,13 +36,16 @@ class MotorTuning:
     #: Duty below which the motors buzz but do not turn (stiction).
     min_duty: float = 22.0
     #: Highest duty the follower is allowed to command.
-    max_duty: float = 75.0
+    max_duty: float = 55.0
     #: Duty used by the legacy fixed-speed helpers.
     cruise_duty: float = 50.0
     #: Duty of the slowed wheel in a legacy fixed-speed turn.
     turn_duty: float = 25.0
     #: Acceleration limit, duty-percent per second. Lower = gentler.
-    ramp_duty_per_s: float = 180.0
+    ramp_duty_per_s: float = 60.0
+    #: Longest time step the ramp will honour, seconds. A slow frame (model
+    #: warm-up, a camera hiccup) must not let the wheels jump to full duty.
+    max_ramp_dt_s: float = 0.1
     #: PWM carrier frequency.
     pwm_freq_hz: int = 1000
 
@@ -51,6 +54,8 @@ class MotorTuning:
             raise ValueError("Motor duties must satisfy 0 <= min_duty < max_duty <= 100.")
         if self.ramp_duty_per_s <= 0.0:
             raise ValueError("ramp_duty_per_s must be positive.")
+        if self.max_ramp_dt_s <= 0.0:
+            raise ValueError("max_ramp_dt_s must be positive.")
 
 
 class MotorController:
@@ -117,7 +122,15 @@ class MotorController:
             dt = now - self._last_update
         self._last_update = now
 
-        max_step = self.tuning.ramp_duty_per_s * max(dt, 0.0)
+        # Cap the step: a long gap since the last update (start-up, a stalled
+        # frame) would otherwise allow an instant jump to the target duty.
+        # A zero step holds the current duty rather than jumping, because
+        # ``slew`` treats a non-positive limit as "no limit".
+        dt = clamp(dt, 0.0, self.tuning.max_ramp_dt_s)
+        if dt <= 0.0:
+            self._requested = (left_duty, right_duty)
+            return
+        max_step = self.tuning.ramp_duty_per_s * dt
         applied_left = slew(self._applied[0], left_duty, max_step)
         applied_right = slew(self._applied[1], right_duty, max_step)
         self._requested = (left_duty, right_duty)
