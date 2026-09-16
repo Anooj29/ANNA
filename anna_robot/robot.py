@@ -137,6 +137,8 @@ class HealthcareRobot:
         self.listener = self._track(MicrophoneListener(
             enabled=config.mic_enabled,
             device_index=config.mic_device_index,
+            device_name=config.mic_device_name,
+            sample_rate=config.mic_sample_rate,
             language=config.mic_language,
         ))
 

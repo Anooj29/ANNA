@@ -134,6 +134,8 @@ class Config:
     require_wake_word: bool = False
     mic_enabled: bool = False
     mic_device_index: Optional[int] = None
+    mic_device_name: Optional[str] = None
+    mic_sample_rate: Optional[int] = None
     mic_language: str = "en-US"
 
     # -- vision output ----------------------------------------------------
@@ -156,7 +158,7 @@ class Config:
     # -- following --------------------------------------------------------
     follow_distance_cm: float = 90.0
     follow_hold_band_cm: float = 18.0
-    follow_max_linear: float = 0.75
+    follow_max_linear: float = 0.5
     follow_max_angular: float = 0.65
     follow_search_timeout_s: float = 8.0
     bearing_kp: float = 0.85
@@ -168,8 +170,8 @@ class Config:
 
     # -- drive base -------------------------------------------------------
     motor_min_duty: float = 22.0
-    motor_max_duty: float = 75.0
-    motor_ramp_duty_per_s: float = 180.0
+    motor_max_duty: float = 55.0
+    motor_ramp_duty_per_s: float = 60.0
     motor_allow_reverse: bool = False
 
     # -- head (two servos) ------------------------------------------------
@@ -251,6 +253,8 @@ class Config:
             require_wake_word=env_bool("ROBOT_REQUIRE_WAKE_WORD", defaults.require_wake_word),
             mic_enabled=env_bool("ROBOT_MIC_ENABLED", defaults.mic_enabled),
             mic_device_index=env_optional_int("ROBOT_MIC_DEVICE_INDEX", defaults.mic_device_index),
+            mic_device_name=env_str("ROBOT_MIC_DEVICE_NAME", defaults.mic_device_name),
+            mic_sample_rate=env_optional_int("ROBOT_MIC_SAMPLE_RATE", defaults.mic_sample_rate),
             mic_language=env_str("ROBOT_MIC_LANGUAGE", defaults.mic_language),
 
             show_debug_window=env_bool("ROBOT_SHOW_DEBUG_WINDOW", defaults.show_debug_window),

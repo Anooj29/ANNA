@@ -365,6 +365,8 @@ combinations (a stop distance beyond the follow distance, head travel past
 | `ROBOT_REQUIRE_WAKE_WORD` | `false` | Require a wake word for every command ("stop" always works) |
 | `ROBOT_MIC_ENABLED` | `false` | Listen on a local microphone as well as the companion link |
 | `ROBOT_MIC_DEVICE_INDEX` | *(default device)* | Which input device to use |
+| `ROBOT_MIC_DEVICE_NAME` | *(auto: camera/USB mic)* | Pick the input device by name |
+| `ROBOT_MIC_SAMPLE_RATE` | *(device default)* | Force a rate such as `48000` if the mic rejects the default |
 | `ROBOT_MIC_LANGUAGE` | `en-US` | Recognition language |
 
 ### Camera and vision output
@@ -390,14 +392,14 @@ combinations (a stop distance beyond the follow distance, head travel past
 |---|---|---|
 | `ROBOT_FOLLOW_DISTANCE_CM` | `90.0` | Distance held while following |
 | `ROBOT_FOLLOW_HOLD_BAND_CM` | `18.0` | Half-width of the "close enough" band |
-| `ROBOT_FOLLOW_MAX_LINEAR` | `0.75` | Forward speed ceiling, 0..1 |
+| `ROBOT_FOLLOW_MAX_LINEAR` | `0.5` | Forward speed ceiling, 0..1 |
 | `ROBOT_FOLLOW_MAX_ANGULAR` | `0.65` | Yaw rate ceiling, 0..1 |
 | `ROBOT_FOLLOW_SEARCH_TIMEOUT_S` | `8.0` | How long to search before giving up |
 | `ROBOT_BEARING_KP/KI/KD` | `0.85` / `0.05` / `0.12` | Bearing (yaw) PID gains |
 | `ROBOT_RANGE_KP/KI/KD` | `1.30` / `0.10` / `0.15` | Range (forward speed) PID gains |
 | `ROBOT_MOTOR_MIN_DUTY` | `22.0` | Duty below which the wheels only buzz |
-| `ROBOT_MOTOR_MAX_DUTY` | `75.0` | Duty ceiling |
-| `ROBOT_MOTOR_RAMP_DUTY_PER_S` | `180.0` | Acceleration limit (lower = gentler) |
+| `ROBOT_MOTOR_MAX_DUTY` | `55.0` | Duty ceiling |
+| `ROBOT_MOTOR_RAMP_DUTY_PER_S` | `60.0` | Acceleration limit (lower = gentler) |
 | `ROBOT_MOTOR_ALLOW_REVERSE` | `false` | Only enable if your driver is wired for reverse |
 
 ### Head servos

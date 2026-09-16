@@ -118,3 +118,12 @@ def test_close_stops_the_pwm_channels():
 def test_tuning_rejects_an_inverted_duty_band():
     with pytest.raises(ValueError, match="min_duty"):
         MotorTuning(min_duty=80, max_duty=20)
+
+
+def test_a_long_frame_gap_does_not_skip_the_ramp():
+    """A slow first frame (model warm-up) must not jump straight to full duty."""
+    motors = build(tuning=MotorTuning(ramp_duty_per_s=60.0))
+    left, _ = motors.drive(1.0, 0.0, dt=3.0)
+    assert left <= 60.0 * 0.1 + 1e-6
+    left, _ = motors.drive(1.0, 0.0, dt=0.0)
+    assert left <= 60.0 * 0.1 + 1e-6
